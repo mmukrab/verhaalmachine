@@ -1,0 +1,57 @@
+rules_version = '2';
+
+// De Verhaalmachine — beveiligingsregels voor Firestore.
+// VERVANG 'VUL_HIER_JOUW_UID_IN' door de UID van jouw spelleider-account
+// (Firebase console → Authentication → Users → kolom "User UID").
+// Meerdere spelleiders? Zet ze in de lijst: ['uid1', 'uid2'].
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isHost() { return signedIn() && request.auth.uid in ['VUL_HIER_JOUW_UID_IN']; }
+    function game(g) { return get(/databases/$(database)/documents/games/$(g)).data; }
+
+    match /games/{g} {
+      // Iedereen met de code (anoniem ingelogd) mag meekijken; alleen de spelleider bestuurt.
+      allow read: if signedIn();
+      allow write: if isHost();
+
+      match /players/{uid} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'at'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 30;
+        allow delete: if isHost();
+      }
+
+      // Elke speler schrijft alleen het eigen document, en alleen tijdens de schrijfronde.
+      match /entries/{uid} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && game(g).phase == 'write'
+          && request.resource.data.keys().hasOnly(['texts', 'at'])
+          && request.resource.data.texts is map
+          && request.resource.data.texts.size() <= 12
+          && request.resource.data.texts[string(game(g).current)] is string
+          && request.resource.data.texts[string(game(g).current)].size() <= 240;
+        allow delete: if isHost();
+      }
+
+      // Elke speler stemt alleen voor zichzelf, alleen tijdens de stemronde, niet op de eigen zin.
+      match /votes/{uid} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && game(g).phase == 'vote'
+          && request.resource.data.keys().hasOnly(['picks'])
+          && request.resource.data.picks is map
+          && request.resource.data.picks.size() <= 12
+          && request.resource.data.picks[string(game(g).current)] is string
+          && request.resource.data.picks[string(game(g).current)] != uid;
+        allow delete: if isHost();
+      }
+    }
+  }
+}
