@@ -1,11 +1,11 @@
-// Plak hier de gegevens van jouw Firebase-web-app
+// Firebase-web-app "verhaalmachine"
 // (Firebase console → Projectinstellingen → Jouw apps → SDK-configuratie → "Config").
 // Deze waarden zijn niet geheim: de beveiliging zit in firestore.rules.
 export const firebaseConfig = {
-  apiKey: "VUL_HIER_JE_API_KEY_IN",
-  authDomain: "jouw-project.firebaseapp.com",
-  projectId: "jouw-project",
-  storageBucket: "jouw-project.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:0000000000000000"
+  apiKey: "AIzaSyDlH_CHAgMOgzMJunS7o9fmVsuqlFNF7bM",
+  authDomain: "verhaalmachine.firebaseapp.com",
+  projectId: "verhaalmachine",
+  storageBucket: "verhaalmachine.firebasestorage.app",
+  messagingSenderId: "873626662801",
+  appId: "1:873626662801:web:28dfd7527e03d76ed50c30"
 };
