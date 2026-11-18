@@ -5,8 +5,8 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=14";
-import { levels } from "./audio.js?v=14";
+import { hash } from "./common.js?v=15";
+import { levels } from "./audio.js?v=15";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
@@ -84,6 +84,58 @@ function orbitPos(o, ang, out, grow = 1) {
   return orbitSys.localToWorld(out);
 }
 
+/* ---------- formations (lobby) ----------
+   Every ~12 s (on a downbeat when music plays) the lights regroup into another shape.
+   Each shape maps light i of n to a point in the tilted frame beside the QR code. */
+const frac = x => x - Math.floor(x);
+const FORMS = [
+  { name: "Banen", orbit: true },
+  { name: "Ring", spin: true, tilt: 0.5, at(i, n, t, R, v) {
+      const a = i / n * Math.PI * 2 + t * 0.3, w = 0.22 * Math.sin(a * 5 + t * 2);
+      return v.set(Math.cos(a) * (R + w), Math.sin(a * 3 + t) * 0.18, Math.sin(a) * (R + w)); } },
+  { name: "Dubbele helix", spin: true, at(i, n, t, R, v) {
+      const m = Math.ceil(n / 2), u = (i >> 1) / Math.max(1, m - 1), a = u * Math.PI * 4 + (i & 1) * Math.PI + t * 0.8;
+      return v.set(Math.cos(a) * R * 0.45, (u - 0.5) * R * 2, Math.sin(a) * R * 0.45); } },
+  { name: "Hart", flat: true, at(i, n, t, R, v) {
+      const u = i / n * Math.PI * 2, x = 16 * Math.pow(Math.sin(u), 3), y = 13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u);
+      const beat = 1 + 0.04 * Math.sin(t * 6);
+      return v.set(x / 17 * R * beat, (y / 17 + 0.15) * R * beat, Math.sin(i * 2.4) * 0.15); } },
+  { name: "Sterrenstelsel", spin: true, tilt: 0.75, at(i, n, t, R, v) {
+      const arm = i % 3, u = Math.floor(i / 3) / Math.max(1, Math.ceil(n / 3) - 1), r = 0.25 + u * R * 1.1;
+      const a = u * Math.PI * 3 + arm * Math.PI * 2 / 3 + t * 0.25;
+      return v.set(Math.cos(a) * r, (frac(i * 0.618) - 0.5) * 0.3, Math.sin(a) * r); } },
+  { name: "Golf", tilt: 0.45, at(i, n, t, R, v) {
+      const c = Math.ceil(Math.sqrt(n)), x = ((i % c) / Math.max(1, c - 1) - 0.5) * R * 2.2, z = (Math.floor(i / c) / Math.max(1, c - 1) - 0.5) * R * 2.2;
+      return v.set(x, 0.4 * Math.sin(x * 1.4 + t * 1.6) * Math.cos(z * 1.4 + t * 1.1), z); } },
+  { name: "Kubus", spin: true, at(i, n, t, R, v) {
+      const f = i % 6, a = (frac(i * 0.618034) - 0.5) * 2, b = (frac(i * 0.414214 + 0.3) - 0.5) * 2, s = R * 0.7;
+      const p = [[1, a, b], [-1, a, b], [a, 1, b], [a, -1, b], [a, b, 1], [a, b, -1]][f];
+      return v.set(p[0] * s, p[1] * s, p[2] * s); } },
+  { name: "Ster", flat: true, at(i, n, t, R, v) {
+      const u = i / n * 10, seg = Math.floor(u), f = u - seg;
+      const pt = k => { const a = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 ? 0.42 : 1) * R; return [Math.cos(a) * r, -Math.sin(a) * r]; };
+      const p = pt(seg), q = pt(seg + 1);
+      return v.set(p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, 0); } }
+];
+let form = 0, formSince = 0, formPending = false, formN = 1;
+/** Jump to another (random) formation now; returns its name. */
+export function nextFormation() { formPending = true; }
+/** For testing: jump to a formation by name. */
+export function setFormation(name) { const i = FORMS.findIndex(f => f.name === name); if (i >= 0) { form = i; formSince = performance.now() / 1000; } }
+export const formationName = () => FORMS[form].name;
+function pickForm(t) {
+  let f = form; while (f === form) f = Math.floor(Math.random() * FORMS.length);
+  form = f; formSince = t;
+}
+function formPos(o, t, grow, out) {
+  const F = FORMS[form], R = 2.2 * grow;
+  F.at(o.idx, formN, t, R, out);
+  if (F.spin) out.applyAxisAngle(Y_AXIS, t * 0.25);
+  else if (F.flat) out.applyAxisAngle(Y_AXIS, Math.sin(t * 0.4) * 0.35);
+  if (F.tilt) out.applyAxisAngle(X_AXIS, F.tilt);           // open flat shapes up towards the camera
+  return orbitSys.localToWorld(out);
+}
+
 /** A particle: a wide soft aura, a coloured halo and a small white-hot core. */
 function particle(color, size) {
   const g = new THREE.Group();
@@ -153,6 +205,9 @@ export function syncSpace(canvas, v) {
   }
   for (const [uid, o] of objs) if (!ids.has(uid)) { cluster.remove(o.g); objs.delete(uid); }
   sphereSide = !!v.lobbyQr;
+  // A stable, shuffled place in each formation.
+  const order = [...objs.keys()].sort((a, b) => hash(a + "f") - hash(b + "f"));
+  order.forEach((u, i) => { objs.get(u).idx = i; }); formN = order.length;
 
   // Writing a sentence makes your light flare up once.
   for (const uid of v.authors) if (!authored.has(uid)) { authored.add(uid); const o = objs.get(uid); if (o && v.phase === "write") o.pulse = 1; }
@@ -210,13 +265,21 @@ function loop(now) {
   orbitSys.position.lerp(tmp.set(sx, -0.2, 0), k * 0.5);
   orbitSys.updateMatrixWorld(true); cluster.updateMatrixWorld(true);
 
+  // Formations: a new shape every ~12 s (on a downbeat when music plays), or on request.
+  if (lobby && !reduce) {
+    if (!formSince) formSince = t;
+    const age = t - formSince;
+    if (formPending || (objs.size >= 3 && age > 12 && (!m.on || m.downbeat || age > 20))) { pickForm(t); formPending = false; }
+  } else if (!lobby && form !== 0) { form = 0; formSince = 0; }
+
   for (const o of objs.values()) {
     if (lobby) {
-      // Orbits speed up with the music and the sphere swells with the bass.
+      // Orbits speed up with the music and the shape swells with the bass.
       if (!reduce) o.ang += o.orbit.dir * dt * (0.35 + m.level * 1.1) / Math.pow(o.orbit.r / 2, 1.5);
       const grow = (reduce ? 1 : 1 + breath * 0.28 + o.pulse * 0.18) * (1 + (spread - 1) * 0.6);
-      o.target = cluster.worldToLocal(orbitPos(o, o.ang, new THREE.Vector3(), grow));
-      o.g.position.lerp(o.target, k);
+      const w = FORMS[form].orbit ? orbitPos(o, o.ang, new THREE.Vector3(), grow) : formPos(o, t, grow, new THREE.Vector3());
+      o.target = cluster.worldToLocal(w);
+      o.g.position.lerp(o.target, k * 0.45);              // a soft glide when the shape changes
     } else {
       // Outside the lobby the lights push outward a little on the music.
       o.g.position.lerp(tmp.copy(o.target).multiplyScalar(reduce ? 1 : 1 + o.music * 0.14 + o.pulse * 0.1), k);

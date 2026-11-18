@@ -4,13 +4,15 @@ import {
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
-  modState, visibleAuthors
-} from "./common.js?v=14";
-import { syncSpace } from "./space.js?v=14";
-import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=14";
+  modState, visibleAuthors, PALETTE
+} from "./common.js?v=15";
+import { syncSpace, nextFormation } from "./space.js?v=15";
+import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=15";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
+const TEST_STEPS = [0, 10, 30, 100, 200];
+let testLights = 0;
 let busy = false, showQr = true, confirmNew = false, setupOpen = false, modOpen = false, qrFor = "";
 
 if (!configured) {
@@ -156,8 +158,14 @@ function render() {
   const players = Object.keys(S.players), colors = {};
   for (const uid of players) colors[uid] = colorOf(S, uid);
   for (const x of chain(S)) if (x) colors[x.uid] = colorOf(S, x.uid);
+  // Test lights: only on this beamer, never stored in the game. About 70% of them "write".
+  const authors = authorsFor(S, r);
+  for (let i = 0; i < testLights; i++) {
+    const id = "testlicht-" + i; players.push(id); colors[id] = PALETTE[(i * 5) % PALETTE.length];
+    if (p !== "lobby" && (i * 7) % 10 < 7) authors.push(id);
+  }
   syncSpace($("space"), {
-    phase: p, round: r, players, colors, lobbyQr: p === "lobby" && showQr && !setupOpen && !!g, authors: authorsFor(S, r), tally: tally(S, r), winner: w[r] || null,
+    phase: p, round: r, players, colors, lobbyQr: p === "lobby" && showQr && !setupOpen && !!g, authors, tally: tally(S, r), winner: w[r] || null,
     votes: votersFor(S, r).length, chain: chain(S).map(x => (x ? x.uid : null))
   });
 }
@@ -190,6 +198,11 @@ function renderRegie() {
     bar.append(btn(showQr ? "QR verbergen" : "QR tonen", "", () => { showQr = !showQr; render(); }));
   }
   musicButtons(bar);
+  // Testing the beamer with more lights, and skipping to another formation.
+  bar.append(btn("Testlichtjes: " + testLights, "", () => {
+    testLights = TEST_STEPS[(TEST_STEPS.indexOf(testLights) + 1) % TEST_STEPS.length]; render();
+  }));
+  if (phase(S) === "lobby") bar.append(btn("Andere vorm", "", () => { nextFormation(); }));
   bar.append(btn("Volledig scherm", "", () => { document.documentElement.requestFullscreen?.().catch(() => {}); }));
   if (!confirmNew) bar.append(btn("Nieuw spel", "", () => { confirmNew = true; render(); }, busy));
   else bar.append(btn("Ja, nieuw spel", "primary", () => newGame(), busy), btn("Annuleer", "", () => { confirmNew = false; render(); }));
