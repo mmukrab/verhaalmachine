@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=11";
-import { moderate } from "./moderation.js?v=11";
+import { firebaseConfig } from "./firebase-config.js?v=12";
+import { moderate } from "./moderation.js?v=12";
 
 export const configured = !String(firebaseConfig.apiKey || "").startsWith("VUL");
 export const app = configured ? initializeApp(firebaseConfig) : null;

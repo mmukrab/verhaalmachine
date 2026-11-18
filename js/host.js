@@ -5,9 +5,9 @@ import {
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
   modState, visibleAuthors
-} from "./common.js?v=11";
-import { syncSpace } from "./space.js?v=11";
-import { playFile, listenMic, stopMusic, musicMode, musicName, nudgeSync } from "./audio.js?v=11";
+} from "./common.js?v=12";
+import { syncSpace } from "./space.js?v=12";
+import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=12";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -203,7 +203,9 @@ document.body.append(musicInput);
 musicInput.onchange = async () => {
   const f = musicInput.files && musicInput.files[0]; musicInput.value = "";
   if (!f) return;
+  const note = el("div", "banner", "Muziek analyseren… (tempo en beats)"); stage.prepend(note);
   try { await playFile(f); } catch (e) { console.error(e); banner(stage, "Dit muziekbestand kan niet worden afgespeeld.", 5000); }
+  note.remove();
   if (S) render();
 };
 function musicButtons(bar) {
@@ -215,7 +217,9 @@ function musicButtons(bar) {
       if (S) render();
     }));
   } else {
-    bar.append(el("span", "lbl", (m === "mic" ? "♪ luistert via microfoon" : "♪ " + musicName()) + " · sync met [ en ]"));
+    const info = musicInfo();
+    const what = m === "mic" ? "♪ luistert via microfoon" : "♪ " + musicName() + (info.grid ? " · " + info.bpm + " BPM" : " · live beatdetectie");
+    bar.append(el("span", "lbl", what + " · sync met [ en ]"));
     bar.append(btn("Muziek stoppen", "", () => { stopMusic(); if (S) render(); }));
   }
 }

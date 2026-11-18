@@ -5,8 +5,8 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=11";
-import { levels } from "./audio.js?v=11";
+import { hash } from "./common.js?v=12";
+import { levels } from "./audio.js?v=12";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
@@ -188,7 +188,7 @@ function loop(now) {
   const t = now / 1000;
   const lobby = phaseNow === "lobby";
   const m = levels();
-  if (m.beat && !reduce) beatFlash = 1;
+  if (m.beat && !reduce) beatFlash = m.downbeat ? 1.6 : 1;   // the first beat of the bar hits harder
   beatFlash = Math.max(0, beatFlash - dt * 4);
   // The whole group breathes with the bass: quick out, slower back.
   const bassNow = m.on ? m.bass : 0;
@@ -220,7 +220,7 @@ function loop(now) {
     // Music: each light listens to its own band plus the bass; quick attack, slower release.
     const want = m.on ? Math.min(1.2, m.bands[o.band] * 0.85 + m.bass * 0.45) : 0;
     o.music += (want - o.music) * (want > o.music ? 1 : 0.15);   // instant attack: no lag on the hit
-    if (m.beat && !reduce) o.pulse = Math.max(o.pulse, 0.5 + m.bass * 0.4);
+    if (m.beat && !reduce) o.pulse = Math.max(o.pulse, (m.downbeat ? 0.85 : 0.5) + m.bass * 0.4);
 
     o.pulse = Math.max(0, o.pulse - dt * 3);
     o.cur += (o.scale - o.cur) * k;

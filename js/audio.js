@@ -1,15 +1,21 @@
-// Music analysis for the beamer: play a music file on the laptop, or listen to the
-// room through the microphone. levels() gives 0..1 values the 3D space reacts to.
+// Music for the beamer: play a music file on the laptop, or listen to the room through the
+// microphone. levels() gives 0..1 values the 3D space reacts to.
+// A music file is analysed before it plays (tempo + beat grid, see beats.js): its beats then
+// come from the song's own clock, so they stay exactly in time. The microphone uses live
+// detection with a tempo lock.
+import { analyseSong, LiveBeats } from "./beats.js?v=12";
+
 let ctx = null, analyser = null, data = null, src = null, el = null, url = "", stream = null;
 let mode = "";                       // "", "file" or "mic"
-let bassAvg = 0, prevBass = 0, lastBeat = 0, lastAt = 0, lastOut = null;
+let lastAt = 0, lastOut = null, grid = null, gridIdx = -1;
+const live = new LiveBeats();
 // Sync: the analyser hears the music before the speakers play it, so visuals are delayed
 // by the output latency (large on Bluetooth). [ and ] shift it by hand.
 let queue = [], current = null, offsetMs = 0;
 try { offsetMs = Number(localStorage.getItem("vm-sync")) || 0; } catch {}
 const BANDS = 16, bands = new Float32Array(BANDS);   // zeros for OFF
 const peaks = new Float32Array(BANDS + 2).fill(0.05);   // per band, plus level and bass
-const OFF = { on: false, level: 0, bass: 0, bands, beat: false };
+const OFF = { on: false, level: 0, bass: 0, bands, beat: false, downbeat: false };
 
 function ensure() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -22,15 +28,23 @@ function ensure() {
 
 export const musicMode = () => mode;
 export const musicName = () => (el && el.dataset.name) || "";
+/** {bpm, grid} — grid is true when beats come from the pre-analysed song. */
+export const musicInfo = () => ({ bpm: grid ? grid.bpm : 0, grid: !!grid });
 
-/** Play a chosen audio file through the laptop speakers and analyse it. */
+/** Analyse a chosen audio file, then play it through the laptop speakers. */
 export async function playFile(file) {
   stopMusic(); ensure();
+  await ctx.resume();
+  try {
+    const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    grid = await analyseSong(buf);
+  } catch (e) { console.warn("Beatanalyse mislukt, live detectie wordt gebruikt.", e); grid = null; }
   url = URL.createObjectURL(file);
   el = new Audio(url); el.loop = true; el.dataset.name = file.name;
   src = ctx.createMediaElementSource(el);
   src.connect(analyser); analyser.connect(ctx.destination);
-  await ctx.resume(); await el.play();
+  await el.play();
+  gridIdx = -1;
   mode = "file";
 }
 
@@ -50,7 +64,8 @@ export function stopMusic() {
   if (src) { try { src.disconnect(); } catch {} src = null; }
   if (analyser) { try { analyser.disconnect(); } catch {} }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  mode = ""; bassAvg = 0; prevBass = 0; lastOut = null; queue = []; current = null; peaks.fill(0.05);
+  mode = ""; lastOut = null; queue = []; current = null; grid = null; gridIdx = -1;
+  peaks.fill(0.05); live.reset();
 }
 
 /** Automatic gain per band: v relative to its own recent peak, squared for contrast. */
@@ -79,7 +94,7 @@ function measure(now) {
   let sum = 0; for (let i = 1; i < 200; i++) sum += data[i];
   const level = norm(sum / 199 / 255, BANDS);
   let b = 0; for (let i = 1; i <= 4; i++) b += data[i];
-  const bassRaw = b / 4 / 255, bass = norm(bassRaw, BANDS + 1);
+  const bass = norm(b / 4 / 255, BANDS + 1);
   const bs = new Float32Array(BANDS);
   // Log-spaced bands from ~40 Hz to ~11 kHz.
   for (let k = 0; k < BANDS; k++) {
@@ -87,17 +102,25 @@ function measure(now) {
     let s = 0; for (let i = lo; i < hi; i++) s += data[i];
     bs[k] = norm(s / (hi - lo) / 255, k);
   }
-  // Beat: a sudden rise in the bass (a kick drum), above its recent average, at most ~4 per second.
-  // Byte frequency data is in decibels, so a small jump is a big change in loudness.
-  const rise = bassRaw - prevBass;
-  const beat = rise > 0.08 && bassRaw > bassAvg + 0.05 && bassRaw > 0.3 && now - lastBeat > 240;
-  if (beat) lastBeat = now;
-  prevBass = bassRaw;
-  bassAvg += (bassRaw - bassAvg) * 0.05;
+  const beat = grid ? false : live.step(data, now);
   return { t: now, on: true, level, bass, bands: bs, beat };
 }
 
-/** Loudness (0..1), bass (0..1), 16 bands (0..1) and whether a beat just hit, timed to the speakers. */
+/** Beats from the pre-analysed grid, read off the song's own playback position. */
+function gridBeat() {
+  if (!grid || !el) return { beat: false, downbeat: false };
+  const t = el.currentTime - syncDelay() / 1000;      // what the room hears right now
+  const B = grid.beats;
+  if (gridIdx >= 0 && t < B[gridIdx] - 0.3) gridIdx = -1;      // looped or jumped back
+  let i = gridIdx;
+  while (i + 1 < B.length && B[i + 1] <= t) i++;
+  if (i === gridIdx || i < 0) return { beat: false, downbeat: false };
+  const fresh = t - B[i] < 0.12;                       // don't flash for beats long past (after a pause)
+  gridIdx = i;
+  return { beat: fresh, downbeat: fresh && i % 4 === grid.downbeat };
+}
+
+/** Loudness (0..1), bass (0..1), 16 bands (0..1), beat and downbeat, timed to the speakers. */
 export function levels() {
   if (!mode || !analyser) return OFF;
   const now = performance.now();
@@ -110,7 +133,9 @@ export function levels() {
   while (queue.length && queue[0].t <= due) { took = queue.shift(); if (took.beat) beat = true; }
   if (took) current = took;
   if (queue.length > 300) queue.splice(0, queue.length - 300);
+  let downbeat = false;
+  if (grid) ({ beat, downbeat } = gridBeat());
   if (!current) return OFF;
-  lastOut = { on: true, level: current.level, bass: current.bass, bands: current.bands, beat };
+  lastOut = { on: true, level: current.level, bass: current.bass, bands: current.bands, beat, downbeat };
   return lastOut;
 }
