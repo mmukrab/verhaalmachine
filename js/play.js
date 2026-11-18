@@ -3,8 +3,9 @@ import {
   configured, auth, fs, signInAnonymously, onAuthStateChanged, doc, setDoc,
   $, el, btn, banner, codeFromUrl, colorOf, defaultColor, isColor, PALETTE, watchGame,
   rounds, cur, phase, textOf, authorsFor, tally, nameOf, shuffleStable,
-  renderArc, renderManuscript, MAX, NAME_MAX
-} from "./common.js?v=9";
+  renderArc, renderManuscript, MAX, NAME_MAX, modState, visibleAuthors, otherNames
+} from "./common.js?v=11";
+import { moderate } from "./moderation.js?v=11";
 
 const stage = $("stage");
 const code = codeFromUrl();
@@ -52,6 +53,9 @@ async function savePlayer(name, color) {
 }
 async function submitEntry(text) {
   const r = cur(S); text = text.trim().slice(0, MAX); if (!text) return;
+  if (moderate(text, otherNames(S, me)).block) {
+    banner(stage, "Je zin bevat een woord dat hier niet past. Pas hem aan en stuur opnieuw.", 5000); return;
+  }
   const texts = { ...((S.entries[me] && S.entries[me].texts) || {}), [r]: text };
   try { await setDoc(doc(fs, "games", code, "entries", me), { texts, at: Date.now() }); }
   catch (e) { banner(stage, "Insturen lukte niet. Misschien is de schrijfronde al gesloten.", 4000); console.error(e); }
@@ -112,13 +116,18 @@ function render() {
     const row = el("div", "row");
     const cnt = el("span", "count", t.value.length + " / " + MAX);
     t.oninput = () => { cnt.textContent = t.value.length + " / " + MAX; };
-    if (mine) row.append(el("span", "pill good", "Ingestuurd"));
+    if (mine) {
+      const ms = modState(S, me, r);
+      row.append(ms.hidden
+        ? el("span", "pill", ms.by === "docent" ? "Verborgen door de docent" : "Ingestuurd · wordt eerst nagekeken")
+        : el("span", "pill good", "Ingestuurd"));
+    }
     row.append(btn(mine ? "Aanpassen" : "Insturen", "primary", () => submitEntry(t.value)), cnt);
     stage.append(t, row);
     return;
   }
 
-  const authors = authorsFor(S, r);
+  const authors = visibleAuthors(S, r);
   if (p === "vote") {
     const myPick = S.votes[me] && S.votes[me].picks && S.votes[me].picks[r];
     stage.append(el("p", "muted", myPick ? "Je hebt gestemd. Je mag nog wisselen tot de docent de uitslag toont." : "Tik op de zin die jij het beste vindt."));
@@ -158,10 +167,10 @@ function stageKey() {
   const p = phase(S), r = cur(S), g = S.game;
   const base = [p, r, g.rounds && JSON.stringify(g.rounds[r])];
   if (p === "lobby") return [...base, Object.keys(S.players).length, colorOf(S, me)].join("|");
-  if (p === "write") return [...base, textOf(S, me, r) || ""].join("|");
+  if (p === "write") { const ms = modState(S, me, r); return [...base, textOf(S, me, r) || "", ms.hidden, ms.by].join("|"); }
   if (p === "vote") {
     const pick = S.votes[me] && S.votes[me].picks && S.votes[me].picks[r];
-    return [...base, pick || "", authorsFor(S, r).map(u => u + ":" + textOf(S, u, r)).join("¦")].join("|");
+    return [...base, pick || "", visibleAuthors(S, r).map(u => u + ":" + textOf(S, u, r)).join("¦")].join("|");
   }
   if (p === "reveal") { const w = g.winners && g.winners[r]; return [...base, w, JSON.stringify(g.ties && g.ties[r]), JSON.stringify(tally(S, r)), S.players[w] && S.players[w].name].join("|"); }
   return p;

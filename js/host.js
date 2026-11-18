@@ -3,14 +3,15 @@ import {
   configured, auth, fs, onAuthStateChanged, signInWithEmailAndPassword, signOut, doc, setDoc, updateDoc, getDoc,
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
-  renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX
-} from "./common.js?v=9";
-import { syncSpace } from "./space.js?v=9";
-import { playFile, listenMic, stopMusic, musicMode, musicName, nudgeSync } from "./audio.js?v=9";
+  renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
+  modState, visibleAuthors
+} from "./common.js?v=11";
+import { syncSpace } from "./space.js?v=11";
+import { playFile, listenMic, stopMusic, musicMode, musicName, nudgeSync } from "./audio.js?v=11";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
-let busy = false, showQr = true, confirmNew = false, setupOpen = false, qrFor = "";
+let busy = false, showQr = true, confirmNew = false, setupOpen = false, modOpen = false, qrFor = "";
 
 if (!configured) {
   stage.replaceChildren(panel(el("h2", null, "Nog niet ingesteld"), el("p", "muted", "Vul eerst js/firebase-config.js in. Zie README.md voor de stappen.")));
@@ -107,12 +108,12 @@ async function writeState(patch) {
   busy = false; render();
 }
 const host = {
-  start: () => writeState({ phase: "write", current: 0, winners: {}, ties: {} }),
+  start: () => writeState({ phase: "write", current: 0, winners: {}, ties: {}, hidden: {} }),
   toVote: () => writeState({ phase: "vote" }),
   // Most votes wins. A tie (also: nobody voted) is settled by a fair lottery among the
   // tied sentences; the host can then pick another of them on the beamer.
   reveal() {
-    const r = cur(S), t = tally(S, r), ids = authorsFor(S, r);
+    const r = cur(S), t = tally(S, r), ids = visibleAuthors(S, r);
     const top = Math.max(0, ...ids.map(u => t[u] || 0));
     const tied = ids.filter(u => (t[u] || 0) === top);
     const win = tied.length ? tied[crypto.getRandomValues(new Uint32Array(1))[0] % tied.length] : null;
@@ -123,11 +124,12 @@ const host = {
     writeState({ ["winners." + r]: uid, ...(tie ? { ["ties." + r + ".by"]: "docent" } : {}) });
   },
   nextCandidate() {
-    const r = cur(S), t = tally(S, r), ids = authorsFor(S, r).sort((a, b) => (t[b] || 0) - (t[a] || 0));
+    const r = cur(S), t = tally(S, r), ids = visibleAuthors(S, r).sort((a, b) => (t[b] || 0) - (t[a] || 0));
     if (ids.length < 2) return;
     const i = ids.indexOf(S.game.winners && S.game.winners[r]);
     writeState({ ["winners." + r]: ids[(i + 1) % ids.length] });
   },
+  setHidden: (uid, hide) => writeState({ ["hidden." + cur(S) + "." + uid]: hide }),
   next: () => cur(S) + 1 < rounds(S).length ? writeState({ phase: "write", current: cur(S) + 1 }) : writeState({ phase: "finale" }),
   finale: () => writeState({ phase: "finale" })
 };
@@ -147,6 +149,9 @@ function render() {
   const setup = $("setup"), want = setupOpen && p === "lobby" && !!g;
   if (want && setup.hidden) setup.replaceChildren(renderSetup());
   setup.hidden = !want;
+  const mod = $("moderation"), showMod = modOpen && !!g && (p === "write" || p === "vote" || p === "reveal");
+  mod.hidden = !showMod;
+  if (showMod) mod.replaceChildren(renderModeration());
   const w = (g && g.winners) || {};
   const players = Object.keys(S.players), colors = {};
   for (const uid of players) colors[uid] = colorOf(S, uid);
@@ -170,10 +175,15 @@ function renderRegie() {
     if (p === "write") bar.append(btn("Naar stemmen", "primary", host.toVote, busy || !authorsFor(S, r).length));
     if (p === "vote") bar.append(btn("Toon winnaar", "primary", host.reveal, busy));
     if (p === "reveal") {
-      if (authorsFor(S, r).length > 1) bar.append(btn("Andere winnaar", "", host.nextCandidate, busy));
+      if (visibleAuthors(S, r).length > 1) bar.append(btn("Andere winnaar", "", host.nextCandidate, busy));
       bar.append(btn(last ? "Naar de finale" : "Volgende ronde", "primary", host.next, busy));
     }
     if (p === "write" || p === "vote") if (!last) bar.append(btn("Direct naar finale", "", host.finale, busy));
+    if (p === "write" || p === "vote" || p === "reveal") {
+      const waiting = authorsFor(S, r).filter(u => modState(S, u, r).by === "auto").length;
+      const b = btn((modOpen ? "Controle sluiten" : "Zinnen controleren") + (waiting ? " (" + waiting + ")" : ""), waiting ? "warn" : "", () => { modOpen = !modOpen; render(); });
+      bar.append(b);
+    }
     if (p === "finale") bar.append(btn("Kopieer verhaal", "", () => {
       navigator.clipboard.writeText(storyAsText(S)).then(() => banner(stage, "Verhaal gekopieerd", 3000), () => banner(stage, "Kopiëren lukte niet", 3000));
     }));
@@ -268,6 +278,35 @@ function renderStage() {
       stage.append(others);
     }
   }
+}
+
+/* ---------- moderation panel ---------- */
+function renderModeration() {
+  const r = cur(S), ids = authorsFor(S, r);
+  const box = panel(el("h3", null, "Zinnen controleren · ronde " + (r + 1)),
+    el("p", "note", "De tekst is vervaagd zodat de klas hem op de beamer niet leest: beweeg de muis erover of tik erop om te lezen. " +
+      "Verborgen zinnen doen niet mee met stemmen en kunnen niet winnen. Tip: open de regie ook op je telefoon."));
+  box.classList.add("mod-box");
+  if (!ids.length) { box.append(el("p", "empty", "Nog geen zinnen ingestuurd.")); return box; }
+  // Waiting for review first, then hidden by you, then the rest.
+  const rank = u => { const m = modState(S, u, r); return m.by === "auto" ? 0 : m.by === "docent" ? 1 : 2; };
+  const list = el("div", "mod-list");
+  for (const uid of [...ids].sort((a, b) => rank(a) - rank(b))) {
+    const m = modState(S, uid, r);
+    const row = el("div", "mod-row" + (m.hidden ? " is-hidden" : ""));
+    const status = m.by === "auto" ? "Wacht op controle · " + m.reasons.join(", ")
+      : m.by === "docent" ? "Verborgen door jou"
+      : m.approved ? "Toegestaan door jou" : "Zichtbaar";
+    const txt = el("span", "mod-text", textOf(S, uid, r)); txt.tabIndex = 0;
+    const meta = el("span", "mod-meta", nameOf(S, uid) + " · " + status);
+    const acts = el("div", "row");
+    if (m.hidden) acts.append(btn("Toestaan", "", () => host.setHidden(uid, false), busy));
+    if (!m.hidden || m.by === "auto") acts.append(btn("Verbergen", m.by === "auto" ? "primary" : "", () => host.setHidden(uid, true), busy));
+    row.append(meta, txt, acts);
+    list.append(row);
+  }
+  box.append(list);
+  return box;
 }
 
 /* ---------- round editor (lobby) ---------- */

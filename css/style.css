@@ -11,7 +11,7 @@
   --good: #1f8a5b;
   --danger: #b4233a;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --headline: "BBH Bogle", "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --headline: "Oswald", "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --story: "Literata", Georgia, "Times New Roman", serif;
   --r: 10px;
   color-scheme: light;
@@ -131,10 +131,11 @@ body.host .panel-box { background: rgba(18, 21, 48, 0.92); border: 1px solid var
 .swatch.free input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .gem { border-radius: 50%; transform: none; }
 
-/* Headline font: BBH Bogle has a single (regular) weight, so no faux bold. */
-h1, h2, h3, .prompt, .join .code { font-family: var(--headline); font-weight: 400; }
-h1 { letter-spacing: 0; }
-.prompt { letter-spacing: 0; line-height: 1.15; }
+/* Headline font: Oswald (condensed, weights 400–700). */
+h1, h2, h3, .prompt, .join .code { font-family: var(--headline); font-weight: 600; }
+h1 { letter-spacing: 0.005em; }
+.prompt { letter-spacing: 0; line-height: 1.15; font-weight: 500; }
+.join .code { font-weight: 700; }
 
 /* Round editor (host, lobby) */
 body.host .panel-box.setup-box { max-width: 900px; }
@@ -154,3 +155,14 @@ body.host .tie-note { color: var(--accent); font-weight: 600; max-width: 70ch; }
 body.host .tie-cards { max-width: 900px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 body.host .tie-cards .card { background: rgba(11, 13, 34, 0.8); font-size: 1.2rem; cursor: pointer; }
 body.host .tie-cards .card:hover { border-color: var(--accent); }
+
+/* Moderation (host) */
+body.host .panel-box.mod-box { max-width: 900px; }
+.mod-list { display: grid; gap: 10px; }
+.mod-row { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); }
+.mod-row.is-hidden { border-color: var(--danger); }
+.mod-meta { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.mod-row.is-hidden .mod-meta { color: var(--danger); }
+.mod-text { font-family: var(--story); font-size: 1.05rem; filter: blur(7px); transition: filter 0.15s; cursor: pointer; outline-offset: 4px; }
+.mod-text:hover, .mod-text:focus { filter: none; }
+button.warn { background: var(--danger); border-color: var(--danger); color: #fff; }

@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=9";
+import { firebaseConfig } from "./firebase-config.js?v=11";
+import { moderate } from "./moderation.js?v=11";
 
 export const configured = !String(firebaseConfig.apiKey || "").startsWith("VUL");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -86,11 +87,26 @@ export const textOf = (S, uid, r) => S.entries[uid] && S.entries[uid].texts && S
 export const authorsFor = (S, r) => Object.keys(S.entries).filter(uid => textOf(S, uid, r));
 export const votersFor = (S, r) => Object.keys(S.votes).filter(uid => S.votes[uid].picks && S.votes[uid].picks[r]);
 export const nameOf = (S, uid) => (S.players[uid] && S.players[uid].name) || "Anoniem";
+/* ---------- moderation ---------- */
+export const otherNames = (S, uid) => Object.keys(S.players).filter(u => u !== uid).map(u => S.players[u].name || "");
+/** {hidden, by: "docent"|"auto"|"", approved, reasons[]} for one sentence. The teacher's choice wins. */
+export function modState(S, uid, r) {
+  const set = S.game && S.game.hidden && S.game.hidden[r] && S.game.hidden[r][uid];
+  const m = moderate(textOf(S, uid, r) || "", otherNames(S, uid));
+  if (set === true) return { hidden: true, by: "docent", approved: false, reasons: m.reasons };
+  if (set === false) return { hidden: false, by: "", approved: true, reasons: m.reasons };
+  const auto = m.block || m.flag;
+  return { hidden: auto, by: auto ? "auto" : "", approved: false, reasons: m.reasons };
+}
+export const isHidden = (S, uid, r) => modState(S, uid, r).hidden;
+/** Authors whose sentence may be voted on and can win. */
+export const visibleAuthors = (S, r) => authorsFor(S, r).filter(uid => !isHidden(S, uid, r));
+
 export function tally(S, r) {
   const t = {};
   for (const uid of Object.keys(S.votes)) {
     const pick = S.votes[uid].picks && S.votes[uid].picks[r];
-    if (pick && pick !== uid && textOf(S, pick, r)) t[pick] = (t[pick] || 0) + 1;
+    if (pick && pick !== uid && textOf(S, pick, r) && !isHidden(S, pick, r)) t[pick] = (t[pick] || 0) + 1;
   }
   return t;
 }
