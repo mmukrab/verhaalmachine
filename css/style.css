@@ -135,3 +135,22 @@ body.host .panel-box { background: rgba(18, 21, 48, 0.92); border: 1px solid var
 h1, h2, h3, .prompt, .join .code { font-family: var(--headline); font-weight: 400; }
 h1 { letter-spacing: 0; }
 .prompt { letter-spacing: 0; line-height: 1.15; }
+
+/* Round editor (host, lobby) */
+body.host .panel-box.setup-box { max-width: 900px; }
+select { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; }
+.round-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.round-row { display: grid; grid-template-columns: 28px minmax(110px, 180px) 1fr auto; gap: 8px; align-items: start; }
+.round-row .round-num { font-weight: 800; color: var(--muted); padding-top: 12px; text-align: right; }
+.round-row textarea { min-height: 0; font-family: var(--display); font-size: 0.95rem; padding: 10px 12px; }
+.round-row input[type=text] { padding: 10px 12px; }
+.round-tools { display: flex; gap: 4px; padding-top: 4px; }
+button.icon { padding: 6px 10px; min-width: 36px; }
+button:disabled { opacity: 0.4; cursor: default; }
+@media (max-width: 640px) { .round-row { grid-template-columns: 24px 1fr; } .round-row textarea, .round-tools { grid-column: 2; } }
+
+/* Tie on the beamer */
+body.host .tie-note { color: var(--accent); font-weight: 600; max-width: 70ch; }
+body.host .tie-cards { max-width: 900px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+body.host .tie-cards .card { background: rgba(11, 13, 34, 0.8); font-size: 1.2rem; cursor: pointer; }
+body.host .tie-cards .card:hover { border-color: var(--accent); }

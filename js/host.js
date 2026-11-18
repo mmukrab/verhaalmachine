@@ -3,10 +3,10 @@ import {
   configured, auth, fs, onAuthStateChanged, signInWithEmailAndPassword, signOut, doc, setDoc, updateDoc, getDoc,
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
-  renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS
-} from "./common.js?v=8";
-import { syncSpace } from "./space.js?v=8";
-import { playFile, listenMic, stopMusic, musicMode, musicName, nudgeSync } from "./audio.js?v=8";
+  renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX
+} from "./common.js?v=9";
+import { syncSpace } from "./space.js?v=9";
+import { playFile, listenMic, stopMusic, musicMode, musicName, nudgeSync } from "./audio.js?v=9";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -107,11 +107,20 @@ async function writeState(patch) {
   busy = false; render();
 }
 const host = {
-  start: () => writeState({ phase: "write", current: 0, winners: {} }),
+  start: () => writeState({ phase: "write", current: 0, winners: {}, ties: {} }),
   toVote: () => writeState({ phase: "vote" }),
+  // Most votes wins. A tie (also: nobody voted) is settled by a fair lottery among the
+  // tied sentences; the host can then pick another of them on the beamer.
   reveal() {
-    const r = cur(S), t = tally(S, r), ids = authorsFor(S, r).sort((a, b) => (t[b] || 0) - (t[a] || 0));
-    writeState({ phase: "reveal", ["winners." + r]: ids[0] || null });
+    const r = cur(S), t = tally(S, r), ids = authorsFor(S, r);
+    const top = Math.max(0, ...ids.map(u => t[u] || 0));
+    const tied = ids.filter(u => (t[u] || 0) === top);
+    const win = tied.length ? tied[crypto.getRandomValues(new Uint32Array(1))[0] % tied.length] : null;
+    writeState({ phase: "reveal", ["winners." + r]: win, ["ties." + r]: tied.length > 1 ? { ids: tied, by: "lot" } : null });
+  },
+  pick(uid) {
+    const r = cur(S), tie = S.game.ties && S.game.ties[r];
+    writeState({ ["winners." + r]: uid, ...(tie ? { ["ties." + r + ".by"]: "docent" } : {}) });
   },
   nextCandidate() {
     const r = cur(S), t = tally(S, r), ids = authorsFor(S, r).sort((a, b) => (t[b] || 0) - (t[a] || 0));
@@ -155,7 +164,7 @@ function renderRegie() {
   bar.append(el("span", "lbl", "Spel " + code + " · " + (g ? names[p] : "niet gevonden")));
   if (g) {
     if (p === "lobby") {
-      bar.append(btn(setupOpen ? "Instellingen sluiten" : "Rondes instellen", "", () => { setupOpen = !setupOpen; render(); }));
+      bar.append(btn(setupOpen ? "Instellingen sluiten" : "Rondes instellen", "", () => { setupOpen = !setupOpen; draftRounds = null; render(); }));
       bar.append(btn("Start ronde 1", "primary", host.start, busy));
     }
     if (p === "write") bar.append(btn("Naar stemmen", "primary", host.toVote, busy || !authorsFor(S, r).length));
@@ -243,26 +252,83 @@ function renderStage() {
     const c = el("div", "card win");
     c.append(el("span", null, textOf(S, w, r)), el("span", "meta", nameOf(S, w) + " · " + (t[w] || 0) + ((t[w] || 0) === 1 ? " stem" : " stemmen")));
     stage.append(c);
+    const tie = S.game.ties && S.game.ties[r];
+    if (tie && tie.ids && tie.ids.length > 1) {
+      const n = t[w] || 0;
+      stage.append(el("p", "tie-note", "Gelijkspel: " + tie.ids.length + " zinnen met " + n + (n === 1 ? " stem" : " stemmen") + " · " +
+        (tie.by === "docent" ? "gekozen door de docent" : "winnaar gekozen door loting") + ". Klik een andere zin om die te kiezen."));
+      const others = el("div", "cards tie-cards");
+      for (const uid of tie.ids) {
+        if (uid === w || !textOf(S, uid, r)) continue;
+        const b = el("button", "card"); b.type = "button"; b.disabled = busy;
+        b.append(el("span", null, textOf(S, uid, r)), el("span", "meta", nameOf(S, uid) + " · Kies deze zin"));
+        b.onclick = () => host.pick(uid);
+        others.append(b);
+      }
+      stage.append(others);
+    }
   }
 }
 
+/* ---------- round editor (lobby) ---------- */
+let draftRounds = null, draftTitle = "";
 function renderSetup() {
   const g = S.game;
-  const ti = el("input"); ti.type = "text"; ti.id = "setup-title"; ti.value = g.title || "Ons verhaal";
+  if (!draftRounds) { draftRounds = rounds(S).map(x => ({ label: x.label, prompt: x.prompt })); draftTitle = g.title || "Ons verhaal"; }
+  const redraw = () => $("setup").replaceChildren(renderSetup());
+
+  const ti = el("input"); ti.type = "text"; ti.id = "setup-title"; ti.maxLength = 80; ti.value = draftTitle;
+  ti.oninput = () => { draftTitle = ti.value; };
   const lt = el("label", null, "Titel van het verhaal"); lt.htmlFor = "setup-title";
-  const ta = el("textarea"); ta.id = "setup-rounds"; ta.rows = 7; ta.style.fontFamily = "var(--display)"; ta.style.fontSize = "0.95rem";
-  ta.value = rounds(S).map(x => x.label + " | " + x.prompt).join("\n");
-  const lr = el("label", null, "Rondes: één per regel, als  Label | vraag"); lr.htmlFor = "setup-rounds";
+
+  // Start from a ready-made set.
+  const ps = el("select"); ps.id = "setup-preset";
+  ps.append(new Option("Kies een kant-en-klare set…", ""));
+  PRESETS.forEach((p, i) => ps.append(new Option(p.name + " · " + p.rounds.length + " rondes", String(i))));
+  ps.onchange = () => {
+    const p = PRESETS[Number(ps.value)]; if (!p) return;
+    draftRounds = p.rounds.map(x => ({ ...x })); draftTitle = p.title; redraw();
+  };
+  const lp = el("label", null, "Kant-en-klare set"); lp.htmlFor = "setup-preset";
+
+  const list = el("ol", "round-list");
+  draftRounds.forEach((rd, i) => {
+    const li = el("li", "round-row");
+    const num = el("span", "round-num", String(i + 1));
+    const lab = el("input"); lab.type = "text"; lab.maxLength = LABEL_MAX; lab.value = rd.label; lab.placeholder = "Label";
+    lab.setAttribute("aria-label", "Label ronde " + (i + 1)); lab.oninput = () => { rd.label = lab.value; };
+    const q = el("textarea"); q.rows = 2; q.maxLength = PROMPT_MAX; q.value = rd.prompt; q.placeholder = "Vraag aan de studenten";
+    q.setAttribute("aria-label", "Vraag ronde " + (i + 1)); q.oninput = () => { rd.prompt = q.value; };
+    const move = (d) => { const j = i + d; [draftRounds[i], draftRounds[j]] = [draftRounds[j], draftRounds[i]]; redraw(); };
+    const tools = el("div", "round-tools");
+    const up = btn("↑", "icon", () => move(-1), i === 0); up.setAttribute("aria-label", "Ronde " + (i + 1) + " omhoog");
+    const down = btn("↓", "icon", () => move(1), i === draftRounds.length - 1); down.setAttribute("aria-label", "Ronde " + (i + 1) + " omlaag");
+    const del = btn("✕", "icon", () => { draftRounds.splice(i, 1); redraw(); }, draftRounds.length <= 1); del.setAttribute("aria-label", "Ronde " + (i + 1) + " verwijderen");
+    tools.append(up, down, del);
+    li.append(num, lab, q, tools);
+    list.append(li);
+  });
+  const add = btn("+ Ronde toevoegen", "", () => { draftRounds.push({ label: "", prompt: "" }); redraw(); }, draftRounds.length >= MAX_ROUNDS);
+  const count = el("span", "note", draftRounds.length + " van max. " + MAX_ROUNDS + " rondes");
+
+  const err = el("p", "note");
   const save = btn("Opslaan", "primary", async () => {
     if (busy) return;
-    const rs = ta.value.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
-      const [a, ...b] = l.split("|"); return b.length ? { label: a.trim().slice(0, 30), prompt: b.join("|").trim().slice(0, 200) } : { label: "Ronde", prompt: a.trim().slice(0, 200) };
-    }).slice(0, 12);
-    if (!rs.length) return;
-    setupOpen = false;
-    await writeState({ title: ti.value.trim().slice(0, 80) || "Ons verhaal", rounds: rs });
+    const rs = draftRounds
+      .map(x => ({ label: x.label.trim().slice(0, LABEL_MAX), prompt: x.prompt.trim().slice(0, PROMPT_MAX) }))
+      .filter(x => x.prompt)
+      .map((x, i) => ({ label: x.label || "Ronde " + (i + 1), prompt: x.prompt }))
+      .slice(0, MAX_ROUNDS);
+    if (!rs.length) { err.textContent = "Vul minstens één vraag in."; return; }
+    setupOpen = false; draftRounds = null;
+    await writeState({ title: draftTitle.trim().slice(0, 80) || "Ons verhaal", rounds: rs });
   }, busy);
-  return panel(el("h3", null, "Spel instellen"), lt, ti, lr, ta, save);
+  const cancel = btn("Annuleren", "", () => { setupOpen = false; draftRounds = null; render(); });
+  const row = el("div", "row"); row.append(add, count);
+  const actions = el("div", "row"); actions.append(save, cancel, err);
+  const box = panel(el("h3", null, "Rondes instellen"), lt, ti, lp, ps, el("label", null, "Rondes (lege vragen worden overgeslagen)"), list, row, actions);
+  box.classList.add("setup-box");
+  return box;
 }
 
 addEventListener("keydown", e => {

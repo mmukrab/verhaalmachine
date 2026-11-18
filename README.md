@@ -47,13 +47,13 @@ De pagina's staan op **GitHub Pages**, de live gegevens in **Firebase** (gratis 
 1. Open op de beamer-laptop `https://<jouw-gebruikersnaam>.github.io/verhaalmachine/host.html` en log in.
 2. Klik **Nieuw spel maken**. Je krijgt een spelcode van 4 tekens en een grote QR-code.
 3. Studenten scannen de QR-code, vullen een (bij)naam in en zijn binnen. Hun naam verschijnt op het scherm.
-4. Optioneel: **Rondes instellen** om de titel en de vragen aan te passen (één per regel: `Label | vraag`).
+4. Optioneel: **Rondes instellen** (alleen vóór ronde 1): titel aanpassen, een kant-en-klare set kiezen, en per ronde een label en vraag invullen. Rondes toevoegen (max. 12), verwijderen en verschuiven met ↑ ↓.
 5. Stuur het spel met de regiebalk: **Start ronde 1 → Naar stemmen → Toon winnaar → Volgende ronde → … → Finale**.
 6. In de finale: **Kopieer verhaal** om het eindresultaat te bewaren.
 
 Handig:
 - **Volledig scherm** in de regiebalk; **toets H** verbergt de regiebalk (beweeg de muis naar boven om hem terug te halen).
-- **Andere winnaar** bij gelijke stand of als je zelf wilt kiezen.
+- **Winnaar:** de zin met de meeste stemmen. Bij een gelijkspel (ook als niemand stemt) kiest het spel eerlijk door loting; de andere zinnen met evenveel stemmen staan eronder en je klikt er één aan om die te kiezen. **Andere winnaar** loopt alle zinnen langs.
 - **Muziek kiezen** speelt een muziekbestand af via de laptop; **Microfoon** luistert naar muziek in het lokaal (er wordt niets opgenomen of verstuurd). De lichtjes worden groter en feller op de muziek en flitsen op de beat. Loopt het licht voor of achter op de muziek (bijv. bij een Bluetooth-speaker)? Druk op **[** (eerder) of **]** (later); de laptop onthoudt de instelling.
 - Elke student heeft een eigen kleur. Die zien ze op hun telefoon én in de 3D-weergave.
 - Elk **Nieuw spel** krijgt een nieuwe code; oude spellen blijven bewaard.

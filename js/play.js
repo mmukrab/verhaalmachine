@@ -4,7 +4,7 @@ import {
   $, el, btn, banner, codeFromUrl, colorOf, defaultColor, isColor, PALETTE, watchGame,
   rounds, cur, phase, textOf, authorsFor, tally, nameOf, shuffleStable,
   renderArc, renderManuscript, MAX, NAME_MAX
-} from "./common.js?v=8";
+} from "./common.js?v=9";
 
 const stage = $("stage");
 const code = codeFromUrl();
@@ -144,6 +144,8 @@ function render() {
       c.append(el("span", null, textOf(S, w, r)), el("span", "meta", (w === me ? "Jouw zin is gekozen! · " : "Geschreven door " + nameOf(S, w) + " · ") + (t[w] || 0) + " stemmen"));
       stage.append(c);
     }
+    const tie = S.game.ties && S.game.ties[r];
+    if (w && tie && tie.ids && tie.ids.length > 1) stage.append(el("p", "muted", "Gelijkspel tussen " + tie.ids.length + " zinnen."));
     if (textOf(S, me, r) && w !== me) stage.append(el("p", "muted", "Jouw zin kreeg " + (t[me] || 0) + (t[me] === 1 ? " stem." : " stemmen.")));
   }
 }
@@ -161,7 +163,7 @@ function stageKey() {
     const pick = S.votes[me] && S.votes[me].picks && S.votes[me].picks[r];
     return [...base, pick || "", authorsFor(S, r).map(u => u + ":" + textOf(S, u, r)).join("¦")].join("|");
   }
-  if (p === "reveal") { const w = g.winners && g.winners[r]; return [...base, w, JSON.stringify(tally(S, r)), S.players[w] && S.players[w].name].join("|"); }
+  if (p === "reveal") { const w = g.winners && g.winners[r]; return [...base, w, JSON.stringify(g.ties && g.ties[r]), JSON.stringify(tally(S, r)), S.players[w] && S.players[w].name].join("|"); }
   return p;
 }
 

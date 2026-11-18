@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=8";
+import { firebaseConfig } from "./firebase-config.js?v=9";
 
 export const configured = !String(firebaseConfig.apiKey || "").startsWith("VUL");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -17,6 +17,20 @@ export const DEFAULT_ROUNDS = [
   { label: "Keerpunt", prompt: "Welke onverwachte wending verandert alles?" },
   { label: "Ontknoping", prompt: "Hoe loopt het af?" }
 ];
+/** Ready-made sets of rounds the host can start from. */
+export const PRESETS = [
+  { name: "Innovatie in de mediaberoepen (2036)", title: "Media in 2036", rounds: [
+    { label: "Aanleiding", prompt: "Welk probleem zie jij in je vakgebied of in de wereld dat media in 2036 kunnen oplossen?" },
+    { label: "Innovatie", prompt: "Welk nieuw mediaproduct of welke nieuwe techniek lost dat in 2036 op?" },
+    { label: "Makers", prompt: "Welke vakmensen (AV, fotografie, vormgeving, redactie, immersief) werkten eraan, en wat deed ieder?" },
+    { label: "Werking", prompt: "Hoe werkt het, en wat ervaart de gebruiker?" },
+    { label: "Risico", prompt: "Wat kan er misgaan, of welk nadeel heeft het?" },
+    { label: "Vakmanschap", prompt: "Wat kan alleen een mens hieraan bijdragen, wat de techniek niet kan?" },
+    { label: "Impact", prompt: "Hoe verandert dit het werkveld, of de wereld?" }
+  ] },
+  { name: "Klassiek verhaal", title: "Ons verhaal", rounds: DEFAULT_ROUNDS }
+];
+export const MAX_ROUNDS = 12, LABEL_MAX = 30, PROMPT_MAX = 200;
 export const MAX = 240;
 export const NAME_MAX = 30;
 
