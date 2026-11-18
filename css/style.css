@@ -172,3 +172,8 @@ button.warn { background: var(--danger); border-color: var(--danger); color: #ff
 .legend-title { font-weight: 700; color: var(--ink); }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend .gem { width: 10px; height: 10px; }
+
+/* Bloom slider in the host bar */
+.bloom { display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; }
+.bloom input[type=range] { width: 120px; accent-color: var(--accent); }
+.bloom-value { min-width: 3.2em; font-variant-numeric: tabular-nums; color: var(--muted); }

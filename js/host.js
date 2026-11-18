@@ -5,9 +5,9 @@ import {
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
   modState, visibleAuthors, PALETTE
-} from "./common.js?v=16";
-import { syncSpace, nextFormation, FREQ_FAMILIES } from "./space.js?v=16";
-import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=16";
+} from "./common.js?v=17";
+import { syncSpace, nextFormation, FREQ_FAMILIES, getBloom, setBloom } from "./space.js?v=17";
+import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=17";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -199,6 +199,7 @@ function renderRegie() {
     bar.append(btn(showQr ? "QR verbergen" : "QR tonen", "", () => { showQr = !showQr; render(); }));
   }
   musicButtons(bar);
+  bar.append(bloomControl);
   // Testing the beamer with more lights, and skipping to another formation.
   bar.append(btn("Testlichtjes: " + testLights, "", () => {
     testLights = TEST_STEPS[(TEST_STEPS.indexOf(testLights) + 1) % TEST_STEPS.length]; render();
@@ -210,6 +211,15 @@ function renderRegie() {
   bar.append(btn("Uitloggen", "", () => signOut(auth)));
   bar.append(el("span", "lbl", "Toets H verbergt deze balk"));
 }
+
+/* ---------- bloom slider: one persistent element, so re-rendering the bar doesn't reset it ---------- */
+const bloomControl = el("label", "bloom");
+const bloomInput = el("input"); bloomInput.type = "range"; bloomInput.min = "0"; bloomInput.max = "150"; bloomInput.step = "5";
+bloomInput.value = String(Math.round(getBloom() * 100));
+bloomInput.setAttribute("aria-label", "Gloed van de lichtjes");
+const bloomValue = el("span", "bloom-value", bloomInput.value + "%");
+bloomInput.oninput = () => { setBloom(Number(bloomInput.value) / 100); bloomValue.textContent = bloomInput.value + "%"; };
+bloomControl.append(el("span", null, "Gloed"), bloomInput, bloomValue);
 
 /* ---------- colour legend (only while music plays) ---------- */
 function renderLegend() {

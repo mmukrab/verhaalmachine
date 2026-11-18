@@ -5,8 +5,8 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=16";
-import { levels } from "./audio.js?v=16";
+import { hash } from "./common.js?v=17";
+import { levels } from "./audio.js?v=17";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
@@ -178,10 +178,26 @@ function setColor(g, color) {
   g.userData.color = color; g.userData.base.set(color); g.userData.range = bandsFor(color);
   g.userData.halo.material.color.set(color); g.userData.aura.material.color.set(color);
 }
+/* Bloom: how far each light's glow spreads (0 = only a sharp point, 1 = default, 1.5 = extra soft).
+   Lower it when lights start to melt together on a bright beamer. */
+let bloom = 1;
+try { const v = Number(localStorage.getItem("vm-bloom")); if (v >= 0 && v <= 1.5 && localStorage.getItem("vm-bloom") !== null) bloom = v; } catch {}
+export const getBloom = () => bloom;
+export function setBloom(v) {
+  bloom = Math.max(0, Math.min(1.5, Number(v) || 0));
+  try { localStorage.setItem("vm-bloom", String(bloom)); } catch {}
+  for (const m of arc.children) if (m.userData && m.userData.aura) applyBloomStatic(m);
+}
+function applyBloomStatic(g) {
+  g.userData.aura.scale.setScalar(1.9 * (0.35 + 0.65 * bloom));
+  g.userData.halo.scale.setScalar(0.55 + 0.45 * bloom);
+  g.userData.aura.material.opacity = 0.12 * bloom;
+}
+
 function setOpacity(g, a, glow) {
-  g.userData.halo.material.opacity = a;
+  g.userData.halo.material.opacity = a * Math.min(1, 0.55 + 0.45 * bloom);
   g.userData.core.material.opacity = a * 0.9;
-  g.userData.aura.material.opacity = Math.min(0.3, a * (0.1 + glow * 0.15));
+  g.userData.aura.material.opacity = Math.min(0.3 * bloom, a * (0.1 + glow * 0.15) * bloom);
 }
 
 function buildArc(slots, colors, finale) {
@@ -194,7 +210,7 @@ function buildArc(slots, colors, finale) {
     const t = n > 1 ? i / (n - 1) : 0.5;
     const p = new THREE.Vector3((t - 0.5) * w, y0 + Math.sin(t * Math.PI) * lift, finale ? 1 : -1);
     let m;
-    if (uid) { m = particle(colors[uid] || "#ffffff", finale ? 1.6 : 0.9); pts.push(p); }
+    if (uid) { m = particle(colors[uid] || "#ffffff", finale ? 1.6 : 0.9); applyBloomStatic(m); pts.push(p); }
     else { m = new THREE.Sprite(glowMat(0x4a5088, 0.5)); m.scale.setScalar(0.35); }
     m.position.copy(p); m.userData.base = p.y; m.userData.i = i; arc.add(m);
   });
@@ -336,9 +352,9 @@ function loop(now) {
     const u = o.g.userData, boost = o.music * 1.3 + o.pulse * 1.1;
     // The winner (scale 2.8) stays big whatever the crowd.
     o.g.scale.setScalar(o.cur * twinkle * (o.scale > 2 ? 1 : sizeK));
-    u.halo.scale.setScalar(1 + boost);
+    u.halo.scale.setScalar((1 + boost) * (0.55 + 0.45 * bloom));
     u.core.scale.setScalar(0.3 * (1 + boost * 0.7));
-    u.aura.scale.setScalar(1.9 * (1 + boost * 0.25));
+    u.aura.scale.setScalar(1.9 * (1 + boost * 0.25) * (0.35 + 0.65 * bloom));
     // Peaks make the colour burn towards white-hot.
     u.halo.material.color.copy(u.base).lerp(WHITE, Math.min(0.35, o.music * 0.2 + o.pulse * 0.25));
     // Only the phase changes fade slowly; the music part of the brightness is applied directly.
