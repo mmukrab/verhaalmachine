@@ -1,7 +1,7 @@
 // Student view: join with a code, pick a name, write a sentence per round, vote.
 import {
   configured, auth, fs, signInAnonymously, onAuthStateChanged, doc, setDoc,
-  $, el, btn, banner, codeFromUrl, cssColor, watchGame,
+  $, el, btn, banner, codeFromUrl, colorOf, defaultColor, isColor, PALETTE, watchGame,
   rounds, cur, phase, textOf, authorsFor, tally, nameOf, shuffleStable,
   renderArc, renderManuscript, MAX, NAME_MAX
 } from "./common.js";
@@ -43,11 +43,12 @@ function renderCodeForm() {
 }
 
 /* ---------- writes ---------- */
-async function saveName(name) {
+async function savePlayer(name, color) {
   name = name.trim().slice(0, NAME_MAX); if (!name) return;
-  try { localStorage.setItem("vm-name", name); } catch {}
-  try { await setDoc(doc(fs, "games", code, "players", me), { name, at: Date.now() }); }
-  catch (e) { banner(stage, "Naam opslaan lukte niet. Probeer het opnieuw.", 4000); console.error(e); }
+  color = isColor(color) ? color.toLowerCase() : defaultColor(me);
+  try { localStorage.setItem("vm-name", name); localStorage.setItem("vm-color", color); } catch {}
+  try { await setDoc(doc(fs, "games", code, "players", me), { name, color, at: Date.now() }); }
+  catch (e) { banner(stage, "Opslaan lukte niet. Probeer het opnieuw.", 4000); console.error(e); }
 }
 async function submitEntry(text) {
   const r = cur(S); text = text.trim().slice(0, MAX); if (!text) return;
@@ -71,7 +72,7 @@ function render() {
 
   const meBox = $("me"); meBox.replaceChildren();
   if (S.players[me]) {
-    const chip = el("span", "me"); const gem = el("span", "gem"); gem.style.background = cssColor(me);
+    const chip = el("span", "me"); const gem = el("span", "gem"); gem.style.background = colorOf(S, me);
     chip.append(gem, el("span", null, S.players[me].name + " · jouw kleur op het scherm"));
     meBox.append(chip);
   }
@@ -92,6 +93,8 @@ function render() {
   if (p === "lobby") {
     stage.append(el("span", "eyebrow", "Je bent binnen"), el("div", "prompt", "Kijk naar het grote scherm. Zo meteen begint ronde 1."),
       el("p", "muted", Object.keys(S.players).length + " spelers in dit spel."));
+    const pick = colorPicker(colorOf(S, me), c => savePlayer(S.players[me].name, c));
+    stage.append(el("label", null, "Jouw kleur op het scherm"), pick);
     return;
   }
   if (p === "finale") {
@@ -152,7 +155,7 @@ function stageKey() {
   if (!S.players[me]) return "name";
   const p = phase(S), r = cur(S), g = S.game;
   const base = [p, r, g.rounds && JSON.stringify(g.rounds[r])];
-  if (p === "lobby") return [...base, Object.keys(S.players).length].join("|");
+  if (p === "lobby") return [...base, Object.keys(S.players).length, colorOf(S, me)].join("|");
   if (p === "write") return [...base, textOf(S, me, r) || ""].join("|");
   if (p === "vote") {
     const pick = S.votes[me] && S.votes[me].picks && S.votes[me].picks[r];
@@ -167,10 +170,38 @@ function renderNameForm() {
   const l = el("label", null, "Hoe wil je heten in dit spel?"); l.htmlFor = "name";
   const i = el("input"); i.type = "text"; i.id = "name"; i.maxLength = NAME_MAX; i.autocomplete = "nickname"; i.placeholder = "Naam of bijnaam";
   try { i.value = localStorage.getItem("vm-name") || ""; } catch {}
+  let color = defaultColor(me);
+  try { const c = localStorage.getItem("vm-color"); if (isColor(c)) color = c; } catch {}
+  const lc = el("label", null, "Kies je kleur");
+  const pick = colorPicker(color, c => { color = c; });
   const b = el("button", "primary", "Meedoen"); b.type = "submit";
-  f.append(l, i, b, el("p", "note", "Je naam is zichtbaar op het grote scherm als jouw zin wordt gekozen."));
-  f.onsubmit = e => { e.preventDefault(); saveName(i.value); };
+  f.append(l, i, lc, pick, b, el("p", "note", "Op het grote scherm ben jij een lichtje in deze kleur. Je naam is zichtbaar als jouw zin wordt gekozen."));
+  f.onsubmit = e => { e.preventDefault(); savePlayer(i.value, color); };
   stage.append(el("span", "eyebrow", "Spel " + code), f);
+}
+/** Swatches plus a free colour field; calls onPick(hex) and marks the choice. */
+function colorPicker(current, onPick) {
+  const box = el("div", "swatches"); box.setAttribute("role", "radiogroup"); box.setAttribute("aria-label", "Kleur");
+  const mark = c => {
+    for (const s of box.querySelectorAll(".swatch")) {
+      const on = s.dataset.c === c; s.classList.toggle("on", on); s.setAttribute("aria-checked", on ? "true" : "false");
+    }
+    free.classList.toggle("on", !PALETTE.includes(c)); free.style.background = PALETTE.includes(c) ? "" : c;
+  };
+  const choose = c => { mark(c); onPick(c); };
+  for (const c of PALETTE) {
+    const s = el("button", "swatch"); s.type = "button"; s.dataset.c = c; s.style.background = c;
+    s.setAttribute("role", "radio"); s.setAttribute("aria-label", "Kleur " + c);
+    s.onclick = () => choose(c);
+    box.append(s);
+  }
+  const free = el("label", "swatch free"); free.title = "Eigen kleur";
+  const inp = el("input"); inp.type = "color"; inp.value = current; inp.setAttribute("aria-label", "Eigen kleur kiezen");
+  inp.onchange = () => choose(inp.value.toLowerCase());
+  free.append(inp, el("span", null, "+"));
+  box.append(free);
+  mark(current);
+  return box;
 }
 function renderCodeFormBelow() {
   stage.append(btn("Andere code invullen", "", () => { location.search = ""; }));

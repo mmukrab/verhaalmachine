@@ -1,30 +1,37 @@
-// 3D story space for the beamer: each sentence is a gem in a night sky,
-// chosen sentences form the story arc (verhaalboog) along the top.
+// 3D story space for the beamer: every player is a glowing particle in their own
+// colour, drifting in a night sky. Writing makes your light brighter, votes fly to
+// it as sparks, the winner comes to the front. Chosen sentences form the story arc
+// (verhaalboog) along the top.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash, hueOf } from "./common.js";
+import { hash } from "./common.js";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-let renderer, scene, camera, cluster, arc, GEO, raf = 0, spin = 0, last = 0;
+let renderer, scene, camera, cluster, arc, GLOW, raf = 0, spin = 0, last = 0;
 const objs = new Map();
-let sparks = [], lastRound = -1, lastVotes = 0, arcKey = "", phaseNow = "lobby";
+let sparks = [], lastRound = -1, lastVotes = 0, arcKey = "", phaseNow = "lobby", authored = new Set();
 
-const colorFor = uid => new THREE.Color().setHSL(hueOf(uid) / 360, 0.72, 0.58);
+function glowTexture() {
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.18, "rgba(255,255,255,0.85)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.28)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const glowMat = (color, opacity = 1) => new THREE.SpriteMaterial({
+  map: GLOW, color: new THREE.Color(color), transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending
+});
 
 function init(canvas) {
   if (renderer) return;
-  GEO = [
-    new THREE.IcosahedronGeometry(0.3, 0), new THREE.OctahedronGeometry(0.32, 0), new THREE.TetrahedronGeometry(0.36, 0),
-    new THREE.DodecahedronGeometry(0.29, 0), new THREE.BoxGeometry(0.38, 0.38, 0.38)
-  ];
+  GLOW = glowTexture();
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0d22);
-  scene.fog = new THREE.FogExp2(0x0b0d22, 0.045);
   camera = new THREE.PerspectiveCamera(50, 1, 0.1, 120);
   camera.position.set(0, 0.4, 9);
-  scene.add(new THREE.AmbientLight(0x9098d0, 1.4));
-  const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(4, 6, 8); scene.add(key);
-  const warm = new THREE.PointLight(0xf5b829, 60, 40, 1.6); warm.position.set(-4, -3, 5); scene.add(warm);
 
   const n = 900, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
@@ -47,15 +54,24 @@ function home(uid) {
   const h = hash(uid), a = (h % 997) / 997 * Math.PI * 2, b = Math.acos(((h >>> 10) % 991) / 495.5 - 1), r = 1 + ((h >>> 20) % 983) / 983 * 1.9;
   return new THREE.Vector3(r * Math.sin(b) * Math.cos(a) * 1.6, r * Math.cos(b) * 0.85, r * Math.sin(b) * Math.sin(a));
 }
-function gem(uid, size) {
-  const m = new THREE.Mesh(GEO[hash(uid + "g") % GEO.length],
-    new THREE.MeshStandardMaterial({ color: colorFor(uid), flatShading: true, roughness: 0.35, metalness: 0.15, transparent: true, opacity: 1 }));
-  m.scale.setScalar(size); return m;
-}
-function clearCluster() { for (const o of objs.values()) cluster.remove(o.m); objs.clear(); }
 
-function buildArc(slots, finale) {
-  const key = slots.join(",") + (finale ? "|f" : "");
+/** A particle: a coloured halo with a small white-hot core. */
+function particle(color, size) {
+  const g = new THREE.Group();
+  const halo = new THREE.Sprite(glowMat(color)); halo.scale.setScalar(1);
+  const core = new THREE.Sprite(glowMat(0xffffff, 0.9)); core.scale.setScalar(0.28);
+  g.add(halo, core); g.scale.setScalar(size);
+  g.userData = { halo, core, color };
+  return g;
+}
+function setColor(g, color) {
+  if (g.userData.color === color) return;
+  g.userData.color = color; g.userData.halo.material.color.set(color);
+}
+function setOpacity(g, a) { g.userData.halo.material.opacity = a; g.userData.core.material.opacity = a * 0.9; }
+
+function buildArc(slots, colors, finale) {
+  const key = slots.map(u => (u ? u + (colors[u] || "") : "-")).join(",") + (finale ? "|f" : "");
   if (key === arcKey) return; arcKey = key;
   while (arc.children.length) arc.remove(arc.children[0]);
   const n = slots.length, pts = [];
@@ -64,52 +80,69 @@ function buildArc(slots, finale) {
     const t = n > 1 ? i / (n - 1) : 0.5;
     const p = new THREE.Vector3((t - 0.5) * w, y0 + Math.sin(t * Math.PI) * lift, finale ? 1 : -1);
     let m;
-    if (uid) { m = gem(uid, finale ? 1.5 : 0.75); pts.push(p); }
-    else { m = new THREE.Mesh(GEO[0], new THREE.MeshBasicMaterial({ color: 0x4a5088, wireframe: true })); m.scale.setScalar(0.55); }
+    if (uid) { m = particle(colors[uid] || "#ffffff", finale ? 1.6 : 0.9); pts.push(p); }
+    else { m = new THREE.Sprite(glowMat(0x4a5088, 0.5)); m.scale.setScalar(0.35); }
     m.position.copy(p); m.userData.base = p.y; m.userData.i = i; arc.add(m);
   });
   if (pts.length > 1) {
     const curve = new THREE.CatmullRomCurve3(pts);
     arc.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(80)),
-      new THREE.LineBasicMaterial({ color: 0xf5b829, transparent: true, opacity: 0.8 })));
+      new THREE.LineBasicMaterial({ color: 0xf5b829, transparent: true, opacity: 0.6 })));
   }
 }
 
-/** v: {phase, round, authors[], tally{}, winner, votes, chain[uid|null]} */
+/** v: {phase, round, players[uid], colors{uid: "#rrggbb"}, authors[], tally{}, winner, votes, chain[uid|null]} */
 export function syncSpace(canvas, v) {
   init(canvas);
   phaseNow = v.phase;
-  if (v.round !== lastRound || v.phase === "lobby" || v.phase === "finale") { clearCluster(); lastRound = v.round; lastVotes = 0; }
-  if (v.phase !== "finale" && v.phase !== "lobby") {
-    for (const uid of v.authors) if (!objs.has(uid)) {
-      const h = home(uid), m = gem(uid, 0.01);
-      m.position.set(h.x * 0.4, -7, h.z + 2);
-      cluster.add(m);
-      objs.set(uid, { m, target: h, scale: 1, opacity: 1, wobble: Math.random() * 6 });
+  const colors = v.colors || {};
+  if (v.round !== lastRound) { lastRound = v.round; lastVotes = 0; authored = new Set(); }
+
+  // One particle per player (and per author, in case a name arrives late).
+  const ids = new Set([...(v.players || []), ...v.authors]);
+  for (const uid of ids) {
+    const color = colors[uid] || "#ffffff";
+    let o = objs.get(uid);
+    if (!o) {
+      const h = home(uid), g = particle(color, 0.01);
+      g.position.set(h.x * 0.4, -7, h.z + 2);
+      cluster.add(g);
+      o = { g, target: h, scale: 0.7, opacity: 0.6, wobble: Math.random() * 6, pulse: 0 };
+      objs.set(uid, o);
     }
-    for (const [uid, o] of objs) if (!v.authors.includes(uid)) { cluster.remove(o.m); objs.delete(uid); }
+    setColor(o.g, color);
   }
+  for (const [uid, o] of objs) if (!ids.has(uid)) { cluster.remove(o.g); objs.delete(uid); }
+
+  // Writing a sentence makes your light flare up once.
+  for (const uid of v.authors) if (!authored.has(uid)) { authored.add(uid); const o = objs.get(uid); if (o && v.phase === "write") o.pulse = 1; }
+
   const max = Math.max(1, ...Object.values(v.tally));
   for (const [uid, o] of objs) {
+    const wrote = v.authors.includes(uid);
     if (v.phase === "reveal") {
       const n = v.tally[uid] || 0;
-      if (uid === v.winner) { o.target = new THREE.Vector3(0, 0.5, 4.2); o.scale = 2.4; o.opacity = 1; }
-      else { o.target = home(uid).multiplyScalar(1.35); o.scale = 0.6 + n / max * 1.4; o.opacity = 0.35; }
-    } else { o.target = home(uid); o.scale = 1; o.opacity = 1; }
+      if (uid === v.winner) { o.target = new THREE.Vector3(0, 0.5, 4.2); o.scale = 2.8; o.opacity = 1; }
+      else { o.target = home(uid).multiplyScalar(1.35); o.scale = 0.6 + n / max * 1.4; o.opacity = wrote ? 0.55 : 0.25; }
+    } else if (v.phase === "write" || v.phase === "vote") {
+      o.target = home(uid); o.scale = wrote ? 1.35 : 0.7; o.opacity = wrote ? 1 : (v.phase === "vote" ? 0.3 : 0.55);
+    } else {
+      o.target = home(uid).multiplyScalar(v.phase === "finale" ? 1.5 : 1); o.scale = 0.9; o.opacity = 0.85;
+    }
   }
   if (v.phase === "vote" && v.votes > lastVotes && !reduce) {
-    for (let i = 0; i < Math.min(v.votes - lastVotes, 12); i++) spark();
+    for (let i = 0; i < Math.min(v.votes - lastVotes, 12); i++) spark(v.authors);
   }
   lastVotes = v.votes;
-  buildArc(v.chain, v.phase === "finale");
+  buildArc(v.chain, colors, v.phase === "finale");
   if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); }
 }
 
-function spark() {
-  const list = [...objs.values()]; if (!list.length) return;
+function spark(authors) {
+  const list = authors.map(u => objs.get(u)).filter(Boolean); if (!list.length) return;
   const to = list[Math.floor(Math.random() * list.length)];
-  const m = new THREE.Mesh(GEO[2], new THREE.MeshBasicMaterial({ color: 0xf5b829, transparent: true }));
-  m.scale.setScalar(0.25); m.position.set((Math.random() - 0.5) * 8, -6, 3);
+  const m = new THREE.Sprite(glowMat(0xf5b829)); m.scale.setScalar(0.3);
+  m.position.set((Math.random() - 0.5) * 8, -6, 3);
   cluster.add(m); sparks.push({ m, to, life: 0 });
 }
 
@@ -122,19 +155,23 @@ function loop(now) {
   cluster.rotation.y = spin;
   const t = now / 1000;
   for (const o of objs.values()) {
-    o.m.position.lerp(o.target, k);
-    o.m.scale.setScalar(o.m.scale.x + (o.scale - o.m.scale.x) * k);
-    o.m.material.opacity += (o.opacity - o.m.material.opacity) * k;
-    if (!reduce) { o.m.rotation.x += dt * 0.4; o.m.rotation.y += dt * 0.6; o.m.position.y += Math.sin(t + o.wobble) * 0.002; }
+    o.g.position.lerp(o.target, k);
+    o.pulse = Math.max(0, o.pulse - dt * 1.2);
+    const twinkle = reduce ? 1 : 1 + Math.sin(t * 2.3 + o.wobble) * 0.06;
+    const want = o.scale * twinkle * (1 + o.pulse * 1.2);
+    o.g.scale.setScalar(o.g.scale.x + (want - o.g.scale.x) * k);
+    const a = o.g.userData.halo.material.opacity;
+    setOpacity(o.g, a + (Math.min(1, o.opacity + o.pulse) - a) * k);
+    if (!reduce) o.g.position.y += Math.sin(t + o.wobble) * 0.002;
   }
   sparks = sparks.filter(s => {
-    s.life += dt; s.m.position.lerp(s.to.m.position, 1 - Math.pow(0.01, dt));
+    s.life += dt; s.m.position.lerp(s.to.g.position, 1 - Math.pow(0.01, dt));
     s.m.material.opacity = Math.max(0, 1 - s.life / 1.4);
-    if (s.life > 1.4) { cluster.remove(s.m); s.to.m.scale.multiplyScalar(1.15); return false; }
+    if (s.life > 1.4) { cluster.remove(s.m); s.to.pulse = Math.max(s.to.pulse, 0.5); return false; }
     return true;
   });
   for (const m of arc.children) if (m.userData.base != null && !reduce) {
-    m.position.y = m.userData.base + Math.sin(t * 0.8 + m.userData.i) * 0.06; m.rotation.y += dt * 0.5;
+    m.position.y = m.userData.base + Math.sin(t * 0.8 + m.userData.i) * 0.06;
   }
   renderer.render(scene, camera);
 }

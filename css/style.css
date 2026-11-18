@@ -118,3 +118,14 @@ body.host .panel-box { background: rgba(18, 21, 48, 0.92); border: 1px solid var
   .card.win { animation: pop 0.5s ease; }
   @keyframes pop { from { transform: scale(0.97); } to { transform: none; } }
 }
+
+/* Colour picker (student page) */
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 8px; }
+.swatch { position: relative; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 2px solid transparent; box-shadow: 0 0 0 1px var(--line); cursor: pointer; display: inline-grid; place-items: center; }
+.swatch:hover { border-color: var(--surface); }
+.swatch.on { border-color: var(--surface); box-shadow: 0 0 0 3px var(--ink); }
+.swatch:focus-visible, .swatch.free:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.swatch.free { background: conic-gradient(#ff5d5d, #ffd23f, #2ecc71, #3ec7ff, #9b6bff, #ff6fb5, #ff5d5d); }
+.swatch.free span { font-weight: 800; font-size: 1.2rem; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); pointer-events: none; }
+.swatch.free input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.gem { border-radius: 50%; transform: none; }

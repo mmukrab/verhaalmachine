@@ -37,8 +37,18 @@ export function joinUrl(code) {
 
 /* ---------- colours: the same per player on phone and beamer ---------- */
 export const hash = s => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; };
-export const hueOf = uid => hash(uid) % 360;
-export const cssColor = uid => `hsl(${hueOf(uid)} 72% 58%)`;
+// Bright colours that stay readable as glowing particles on the dark beamer sky.
+export const PALETTE = [
+  "#ff5d5d", "#ff9f43", "#ffd23f", "#b8f25a", "#2ecc71", "#1dd3b0",
+  "#3ec7ff", "#4d7cff", "#9b6bff", "#e46bff", "#ff6fb5", "#f4f4f8"
+];
+export const isColor = c => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c);
+export const defaultColor = uid => PALETTE[hash(uid) % PALETTE.length];
+/** The colour a player picked, or a stable default from their id. */
+export const colorOf = (S, uid) => {
+  const c = S && S.players && S.players[uid] && S.players[uid].color;
+  return isColor(c) ? c.toLowerCase() : defaultColor(uid);
+};
 
 /* ---------- live game state ---------- */
 export function watchGame(code, onChange, onError) {

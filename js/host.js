@@ -1,7 +1,7 @@
 // Teacher view: log in, start a game, run the rounds on the beamer.
 import {
   configured, auth, fs, onAuthStateChanged, signInWithEmailAndPassword, signOut, doc, setDoc, updateDoc, getDoc,
-  $, el, btn, banner, codeFromUrl, joinUrl, cssColor, watchGame,
+  $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS
 } from "./common.js";
@@ -20,7 +20,7 @@ if (!configured) {
     if (code) open(code); else renderStart();
   });
 }
-syncSpace($("space"), { phase: "lobby", round: 0, authors: [], tally: {}, winner: null, votes: 0, chain: DEFAULT_ROUNDS.map(() => null) });
+syncSpace($("space"), { phase: "lobby", round: 0, players: [], colors: {}, authors: [], tally: {}, winner: null, votes: 0, chain: DEFAULT_ROUNDS.map(() => null) });
 
 function panel(...kids) { const p = el("div", "panel-box"); p.append(...kids); return p; }
 function stopWatching() { if (unwatch) unwatch(); unwatch = null; S = null; $("regie").hidden = true; $("join").hidden = true; }
@@ -138,8 +138,11 @@ function render() {
   if (want && setup.hidden) setup.replaceChildren(renderSetup());
   setup.hidden = !want;
   const w = (g && g.winners) || {};
+  const players = Object.keys(S.players), colors = {};
+  for (const uid of players) colors[uid] = colorOf(S, uid);
+  for (const x of chain(S)) if (x) colors[x.uid] = colorOf(S, x.uid);
   syncSpace($("space"), {
-    phase: p, round: r, authors: authorsFor(S, r), tally: tally(S, r), winner: w[r] || null,
+    phase: p, round: r, players, colors, authors: authorsFor(S, r), tally: tally(S, r), winner: w[r] || null,
     votes: votersFor(S, r).length, chain: chain(S).map(x => (x ? x.uid : null))
   });
 }
@@ -199,7 +202,7 @@ function renderStage() {
     stage.append(el("span", "eyebrow", players.length + (players.length === 1 ? " speler" : " spelers") + " binnen"),
       el("div", "prompt", "Scan de code en doe mee"));
     const chips = el("div", "names");
-    for (const uid of players) { const s = el("span"); const gm = el("span", "gem"); gm.style.background = cssColor(uid); s.append(gm, document.createTextNode(nameOf(S, uid))); chips.append(s); }
+    for (const uid of players) { const s = el("span"); const gm = el("span", "gem"); gm.style.background = colorOf(S, uid); s.append(gm, document.createTextNode(nameOf(S, uid))); chips.append(s); }
     stage.append(chips);
     return;
   }

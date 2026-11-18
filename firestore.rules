@@ -20,7 +20,9 @@ service cloud.firestore {
       match /players/{uid} {
         allow read: if signedIn();
         allow create, update: if signedIn() && request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['name', 'at'])
+          && request.resource.data.keys().hasOnly(['name', 'at', 'color'])
+          && request.resource.data.get('color', '#000000') is string
+          && request.resource.data.get('color', '#000000').matches('^#[0-9a-fA-F]{6}$')
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 30;
