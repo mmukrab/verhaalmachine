@@ -42,15 +42,17 @@ function hits(n, list) {
   return out;
 }
 
-/** {block, flag, reasons[]} for a sentence; otherNames = names of the other players. */
-export function moderate(text, otherNames = []) {
+/** {block, flag, reasons[]} for a sentence; otherNames = names of the other players
+ *  (raw strings, or already normalized with normName for speed in big groups). */
+export const normName = name => normalize(name).trim();
+export function moderate(text, otherNames = [], namesAreNormalized = false) {
   const n = normalize(text);
   const b = hits(n, BLOCK_N), f = hits(n, FLAG_N), reasons = [];
   if (b.length) reasons.push("grof woord");
   if (f.length) reasons.push("gevoelig woord");
   // Naming a classmate is how bullying slips past a word list: let the teacher look first.
   for (const name of otherNames) {
-    const nn = normalize(name).trim();
+    const nn = namesAreNormalized ? name : normName(name);
     if (nn.length >= 3 && n.includes(" " + nn + " ")) { reasons.push("noemt een klasgenoot"); break; }
   }
   return { block: b.length > 0, flag: !b.length && reasons.length > 0, reasons };

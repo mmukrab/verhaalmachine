@@ -5,14 +5,17 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=12";
-import { levels } from "./audio.js?v=12";
+import { hash } from "./common.js?v=13";
+import { levels } from "./audio.js?v=13";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
 const objs = new Map();
 let sparks = [], lastRound = -1, lastVotes = 0, arcKey = "", phaseNow = "lobby", authored = new Set();
 let sphereSide = false, stars, beatFlash = 0, breath = 0;
+// Crowd: with many players each light gets smaller and softer and they spread out more,
+// so a big group stays a field of lights instead of one white cloud. 1 = up to ~24 players.
+let crowd = 1, sizeK = 1, opK = 1, spread = 1;
 const WHITE = new THREE.Color(0xffffff);
 const tmp = new THREE.Vector3(), X_AXIS = new THREE.Vector3(1, 0, 0), Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -132,6 +135,8 @@ export function syncSpace(canvas, v) {
 
   // One particle per player (and per author, in case a name arrives late).
   const ids = new Set([...(v.players || []), ...v.authors]);
+  crowd = Math.min(1, Math.sqrt(24 / Math.max(1, ids.size)));
+  sizeK = 0.45 + 0.55 * crowd; opK = 0.4 + 0.6 * crowd; spread = 1 + (1 - crowd) * 0.7;
   for (const uid of ids) {
     const color = colors[uid] || "#ffffff";
     let o = objs.get(uid);
@@ -158,11 +163,11 @@ export function syncSpace(canvas, v) {
     if (v.phase === "reveal") {
       const n = v.tally[uid] || 0;
       if (uid === v.winner) { o.target = new THREE.Vector3(0, 0.5, 4.2); o.scale = 2.8; o.opacity = 1; }
-      else { o.target = home(uid).multiplyScalar(1.35); o.scale = 0.6 + n / max * 1.4; o.opacity = wrote ? 0.55 : 0.25; }
+      else { o.target = home(uid).multiplyScalar(1.35 * spread); o.scale = 0.6 + n / max * 1.4; o.opacity = wrote ? 0.55 : 0.25; }
     } else if (v.phase === "write" || v.phase === "vote") {
-      o.target = home(uid); o.scale = wrote ? 1.35 : 0.7; o.opacity = wrote ? 1 : (v.phase === "vote" ? 0.3 : 0.55);
+      o.target = home(uid).multiplyScalar(spread); o.scale = wrote ? 1.35 : 0.7; o.opacity = wrote ? 1 : (v.phase === "vote" ? 0.3 : 0.55);
     } else {
-      o.target = home(uid).multiplyScalar(v.phase === "finale" ? 1.5 : 1); o.scale = v.phase === "lobby" ? 1.1 : 0.9; o.opacity = v.phase === "lobby" ? 1 : 0.85;
+      o.target = home(uid).multiplyScalar((v.phase === "finale" ? 1.5 : 1) * spread); o.scale = v.phase === "lobby" ? 1.1 : 0.9; o.opacity = v.phase === "lobby" ? 1 : 0.85;
     }
   }
   if (v.phase === "vote" && v.votes > lastVotes && !reduce) {
@@ -209,7 +214,7 @@ function loop(now) {
     if (lobby) {
       // Orbits speed up with the music and the sphere swells with the bass.
       if (!reduce) o.ang += o.orbit.dir * dt * (0.35 + m.level * 1.1) / Math.pow(o.orbit.r / 2, 1.5);
-      const grow = reduce ? 1 : 1 + breath * 0.28 + o.pulse * 0.18;
+      const grow = (reduce ? 1 : 1 + breath * 0.28 + o.pulse * 0.18) * (1 + (spread - 1) * 0.6);
       o.target = cluster.worldToLocal(orbitPos(o, o.ang, new THREE.Vector3(), grow));
       o.g.position.lerp(o.target, k);
     } else {
@@ -228,7 +233,8 @@ function loop(now) {
     // The light itself swells strongly; the wide aura grows only a little, so a full
     // class does not melt into one white cloud.
     const u = o.g.userData, boost = o.music * 1.3 + o.pulse * 1.1;
-    o.g.scale.setScalar(o.cur * twinkle);
+    // The winner (scale 2.8) stays big whatever the crowd.
+    o.g.scale.setScalar(o.cur * twinkle * (o.scale > 2 ? 1 : sizeK));
     u.halo.scale.setScalar(1 + boost);
     u.core.scale.setScalar(0.3 * (1 + boost * 0.7));
     u.aura.scale.setScalar(1.9 * (1 + boost * 0.25));
@@ -236,7 +242,8 @@ function loop(now) {
     u.halo.material.color.copy(u.base).lerp(WHITE, Math.min(0.35, o.music * 0.2 + o.pulse * 0.25));
     // Only the phase changes fade slowly; the music part of the brightness is applied directly.
     o.op += (o.opacity - o.op) * k;
-    setOpacity(o.g, Math.min(1, o.op * (m.on ? 0.55 + o.music * 0.45 : 1) + o.pulse * 0.5), o.music + o.pulse);
+    const ok = o.scale > 2 ? 1 : opK;
+    setOpacity(o.g, Math.min(1, o.op * (m.on ? 0.55 + o.music * 0.45 : 1) + o.pulse * 0.5) * ok, (o.music + o.pulse) * ok);
     if (!reduce) o.g.position.y += Math.sin(t + o.wobble) * 0.002;
   }
   stars.material.opacity = 0.7 + beatFlash * 0.3;

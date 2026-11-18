@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js?v=12";
-import { moderate } from "./moderation.js?v=12";
+import { firebaseConfig } from "./firebase-config.js?v=13";
+import { moderate, normName } from "./moderation.js?v=13";
 
 export const configured = !String(firebaseConfig.apiKey || "").startsWith("VUL");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -89,10 +89,29 @@ export const votersFor = (S, r) => Object.keys(S.votes).filter(uid => S.votes[ui
 export const nameOf = (S, uid) => (S.players[uid] && S.players[uid].name) || "Anoniem";
 /* ---------- moderation ---------- */
 export const otherNames = (S, uid) => Object.keys(S.players).filter(u => u !== uid).map(u => S.players[u].name || "");
+// With a big class the filter runs for every sentence on every update, so results are cached
+// per players-snapshot (a new object whenever someone joins or renames) and per sentence text.
+const modCache = new WeakMap();
+function cachedModerate(S, uid, text) {
+  let c = modCache.get(S.players);
+  if (!c) {
+    const names = new Map(Object.keys(S.players).map(u => [u, normName(S.players[u].name || "")]));
+    c = { names, results: new Map() };
+    modCache.set(S.players, c);
+  }
+  const key = uid + "|" + text;
+  let m = c.results.get(key);
+  if (!m) {
+    const others = []; for (const [u, n] of c.names) if (u !== uid) others.push(n);
+    m = moderate(text, others, true);
+    c.results.set(key, m);
+  }
+  return m;
+}
 /** {hidden, by: "docent"|"auto"|"", approved, reasons[]} for one sentence. The teacher's choice wins. */
 export function modState(S, uid, r) {
   const set = S.game && S.game.hidden && S.game.hidden[r] && S.game.hidden[r][uid];
-  const m = moderate(textOf(S, uid, r) || "", otherNames(S, uid));
+  const m = cachedModerate(S, uid, textOf(S, uid, r) || "");
   if (set === true) return { hidden: true, by: "docent", approved: false, reasons: m.reasons };
   if (set === false) return { hidden: false, by: "", approved: true, reasons: m.reasons };
   const auto = m.block || m.flag;
