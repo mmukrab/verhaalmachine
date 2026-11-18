@@ -5,8 +5,8 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=7";
-import { levels } from "./audio.js?v=7";
+import { hash } from "./common.js?v=8";
+import { levels } from "./audio.js?v=8";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
@@ -140,7 +140,7 @@ export function syncSpace(canvas, v) {
       g.position.set(h.x * 0.4, -7, h.z + 2);
       cluster.add(g);
       const orbit = orbitOf(uid);
-      o = { g, target: h, scale: 0.7, cur: 0.01, opacity: 0.6, wobble: Math.random() * 6, pulse: 0, music: 0,
+      o = { g, target: h, scale: 0.7, cur: 0.01, opacity: 0.6, op: 0.6, wobble: Math.random() * 6, pulse: 0, music: 0,
         orbit, ang: orbit.phase, band: hash(uid + "band") % 16 };
       objs.set(uid, o);
     }
@@ -192,7 +192,7 @@ function loop(now) {
   beatFlash = Math.max(0, beatFlash - dt * 4);
   // The whole group breathes with the bass: quick out, slower back.
   const bassNow = m.on ? m.bass : 0;
-  breath += (bassNow - breath) * (bassNow > breath ? 0.5 : 0.1);
+  breath += (bassNow - breath) * (bassNow > breath ? 0.85 : 0.12);
   camera.position.z = 9 - (reduce ? 0 : beatFlash * 0.18 + breath * 0.15);
 
   if (phaseNow === "reveal") spin += (Math.round(spin / (Math.PI * 2)) * Math.PI * 2 - spin) * k;
@@ -219,10 +219,10 @@ function loop(now) {
 
     // Music: each light listens to its own band plus the bass; quick attack, slower release.
     const want = m.on ? Math.min(1.2, m.bands[o.band] * 0.85 + m.bass * 0.45) : 0;
-    o.music += (want - o.music) * (want > o.music ? 0.6 : 0.09);
+    o.music += (want - o.music) * (want > o.music ? 1 : 0.15);   // instant attack: no lag on the hit
     if (m.beat && !reduce) o.pulse = Math.max(o.pulse, 0.5 + m.bass * 0.4);
 
-    o.pulse = Math.max(0, o.pulse - dt * 2.2);
+    o.pulse = Math.max(0, o.pulse - dt * 3);
     o.cur += (o.scale - o.cur) * k;
     const twinkle = reduce ? 1 : 1 + Math.sin(t * 2.3 + o.wobble) * 0.06;
     // The light itself swells strongly; the wide aura grows only a little, so a full
@@ -234,8 +234,9 @@ function loop(now) {
     u.aura.scale.setScalar(1.9 * (1 + boost * 0.25));
     // Peaks make the colour burn towards white-hot.
     u.halo.material.color.copy(u.base).lerp(WHITE, Math.min(0.35, o.music * 0.2 + o.pulse * 0.25));
-    const a = o.g.userData.halo.material.opacity;
-    setOpacity(o.g, a + (Math.min(1, o.opacity * (m.on ? 0.55 + o.music * 0.45 : 1) + o.pulse * 0.5) - a) * k, o.music + o.pulse);
+    // Only the phase changes fade slowly; the music part of the brightness is applied directly.
+    o.op += (o.opacity - o.op) * k;
+    setOpacity(o.g, Math.min(1, o.op * (m.on ? 0.55 + o.music * 0.45 : 1) + o.pulse * 0.5), o.music + o.pulse);
     if (!reduce) o.g.position.y += Math.sin(t + o.wobble) * 0.002;
   }
   stars.material.opacity = 0.7 + beatFlash * 0.3;

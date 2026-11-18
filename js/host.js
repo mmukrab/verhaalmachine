@@ -4,9 +4,9 @@ import {
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS
-} from "./common.js?v=7";
-import { syncSpace } from "./space.js?v=7";
-import { playFile, listenMic, stopMusic, musicMode, musicName } from "./audio.js?v=7";
+} from "./common.js?v=8";
+import { syncSpace } from "./space.js?v=8";
+import { playFile, listenMic, stopMusic, musicMode, musicName, nudgeSync } from "./audio.js?v=8";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -196,7 +196,7 @@ function musicButtons(bar) {
       if (S) render();
     }));
   } else {
-    bar.append(el("span", "lbl", m === "mic" ? "♪ luistert via microfoon" : "♪ " + musicName()));
+    bar.append(el("span", "lbl", (m === "mic" ? "♪ luistert via microfoon" : "♪ " + musicName()) + " · sync met [ en ]"));
     bar.append(btn("Muziek stoppen", "", () => { stopMusic(); if (S) render(); }));
   }
 }
@@ -268,4 +268,9 @@ function renderSetup() {
 addEventListener("keydown", e => {
   if (e.target.closest("input, textarea")) return;
   if (e.key === "h" || e.key === "H") $("regie").classList.toggle("tucked");
+  // Music sync: [ = lights earlier, ] = lights later (20 ms per press).
+  if ((e.key === "[" || e.key === "]") && musicMode()) {
+    const d = nudgeSync(e.key === "]" ? 20 : -20);
+    banner(stage, "Muzieksync: lichtjes " + Math.round(d) + " ms na de analyse", 1500);
+  }
 });
