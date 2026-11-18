@@ -4,8 +4,9 @@ import {
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS
-} from "./common.js?v=4";
-import { syncSpace } from "./space.js?v=4";
+} from "./common.js?v=5";
+import { syncSpace } from "./space.js?v=5";
+import { playFile, listenMic, stopMusic, musicMode, musicName } from "./audio.js?v=5";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -169,11 +170,35 @@ function renderRegie() {
     }));
     bar.append(btn(showQr ? "QR verbergen" : "QR tonen", "", () => { showQr = !showQr; render(); }));
   }
+  musicButtons(bar);
   bar.append(btn("Volledig scherm", "", () => { document.documentElement.requestFullscreen?.().catch(() => {}); }));
   if (!confirmNew) bar.append(btn("Nieuw spel", "", () => { confirmNew = true; render(); }, busy));
   else bar.append(btn("Ja, nieuw spel", "primary", () => newGame(), busy), btn("Annuleer", "", () => { confirmNew = false; render(); }));
   bar.append(btn("Uitloggen", "", () => signOut(auth)));
   bar.append(el("span", "lbl", "Toets H verbergt deze balk"));
+}
+
+/* ---------- music ---------- */
+const musicInput = el("input"); musicInput.type = "file"; musicInput.accept = "audio/*"; musicInput.hidden = true;
+document.body.append(musicInput);
+musicInput.onchange = async () => {
+  const f = musicInput.files && musicInput.files[0]; musicInput.value = "";
+  if (!f) return;
+  try { await playFile(f); } catch (e) { console.error(e); banner(stage, "Dit muziekbestand kan niet worden afgespeeld.", 5000); }
+  if (S) render();
+};
+function musicButtons(bar) {
+  const m = musicMode();
+  if (!m) {
+    bar.append(btn("Muziek kiezen", "", () => musicInput.click()));
+    bar.append(btn("Microfoon", "", async () => {
+      try { await listenMic(); } catch (e) { console.error(e); banner(stage, "De microfoon is niet beschikbaar of geen toestemming gegeven.", 6000); }
+      if (S) render();
+    }));
+  } else {
+    bar.append(el("span", "lbl", m === "mic" ? "♪ luistert via microfoon" : "♪ " + musicName()));
+    bar.append(btn("Muziek stoppen", "", () => { stopMusic(); if (S) render(); }));
+  }
 }
 
 function renderJoin() {

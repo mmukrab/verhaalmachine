@@ -54,6 +54,7 @@ De pagina's staan op **GitHub Pages**, de live gegevens in **Firebase** (gratis 
 Handig:
 - **Volledig scherm** in de regiebalk; **toets H** verbergt de regiebalk (beweeg de muis naar boven om hem terug te halen).
 - **Andere winnaar** bij gelijke stand of als je zelf wilt kiezen.
+- **Muziek kiezen** speelt een muziekbestand af via de laptop; **Microfoon** luistert naar muziek in het lokaal (er wordt niets opgenomen of verstuurd). De lichtjes worden groter en feller op de muziek en flitsen op de beat.
 - Elke student heeft een eigen kleur. Die zien ze op hun telefoon én in de 3D-weergave.
 - Elk **Nieuw spel** krijgt een nieuwe code; oude spellen blijven bewaard.
 
