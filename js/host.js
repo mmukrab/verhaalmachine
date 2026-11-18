@@ -4,9 +4,9 @@ import {
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS
-} from "./common.js?v=5";
-import { syncSpace } from "./space.js?v=5";
-import { playFile, listenMic, stopMusic, musicMode, musicName } from "./audio.js?v=5";
+} from "./common.js?v=6";
+import { syncSpace } from "./space.js?v=6";
+import { playFile, listenMic, stopMusic, musicMode, musicName } from "./audio.js?v=6";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
