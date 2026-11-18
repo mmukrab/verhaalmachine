@@ -5,9 +5,9 @@ import {
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
   modState, visibleAuthors, PALETTE
-} from "./common.js?v=17";
-import { syncSpace, nextFormation, FREQ_FAMILIES, getBloom, setBloom } from "./space.js?v=17";
-import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=17";
+} from "./common.js?v=18";
+import { syncSpace, nextFormation, FREQ_FAMILIES, getBloom, setBloom, getCamOrbit, setCamOrbit } from "./space.js?v=18";
+import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=18";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -200,6 +200,7 @@ function renderRegie() {
   }
   musicButtons(bar);
   bar.append(bloomControl);
+  bar.append(btn("Camera draait: " + (getCamOrbit() ? "aan" : "uit"), getCamOrbit() ? "on" : "", () => { setCamOrbit(!getCamOrbit()); render(); }));
   // Testing the beamer with more lights, and skipping to another formation.
   bar.append(btn("Testlichtjes: " + testLights, "", () => {
     testLights = TEST_STEPS[(TEST_STEPS.indexOf(testLights) + 1) % TEST_STEPS.length]; render();

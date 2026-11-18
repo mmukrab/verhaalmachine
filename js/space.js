@@ -5,14 +5,20 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=17";
-import { levels } from "./audio.js?v=17";
+import { hash } from "./common.js?v=18";
+import { levels } from "./audio.js?v=18";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
 const objs = new Map();
 let sparks = [], lastRound = -1, lastVotes = 0, arcKey = "", phaseNow = "lobby", authored = new Set();
 let sphereSide = false, stars, beatFlash = 0, breath = 0;
+// Camera orbit (host toggle): angle around the lights, and how much the orbit is blended in.
+let camOrbit = false, camAngle = 0, camBlend = 0;
+try { camOrbit = localStorage.getItem("vm-camorbit") === "1"; } catch {}
+const camLook = new THREE.Vector3(0, -0.3, 0), camLookNow = new THREE.Vector3();
+export const getCamOrbit = () => camOrbit;
+export function setCamOrbit(on) { camOrbit = !!on; try { localStorage.setItem("vm-camorbit", camOrbit ? "1" : "0"); } catch {} }
 // Crowd: with many players each light gets smaller and softer and they spread out more,
 // so a big group stays a field of lights instead of one white cloud. 1 = up to ~24 players.
 let crowd = 1, sizeK = 1, opK = 1, spread = 1;
@@ -296,7 +302,6 @@ function loop(now) {
   // The whole group breathes with the bass: quick out, slower back.
   const bassNow = m.on ? m.bass : 0;
   breath += (bassNow - breath) * (bassNow > breath ? 0.85 : 0.12);
-  camera.position.z = 9 - (reduce ? 0 : beatFlash * 0.18 + breath * 0.15);
 
   if (phaseNow === "reveal") spin += (Math.round(spin / (Math.PI * 2)) * Math.PI * 2 - spin) * k;
   else if (!reduce) spin += dt * 0.12;
@@ -307,6 +312,24 @@ function loop(now) {
   const sx = sphereSide && halfW > 6 ? Math.min(halfW - 3.4, 5) : 0;
   orbitSys.position.lerp(tmp.set(sx, -0.2, 0), k * 0.5);
   orbitSys.updateMatrixWorld(true); cluster.updateMatrixWorld(true);
+
+  // Camera: optionally circles slowly around the lights. During the result and the finale it
+  // eases back to the front, so the winner and the story arc are read straight on.
+  const orbiting = camOrbit && !reduce && phaseNow !== "reveal" && phaseNow !== "finale";
+  if (orbiting) camAngle += dt * 0.12;
+  else camAngle += (Math.round(camAngle / (Math.PI * 2)) * Math.PI * 2 - camAngle) * k * 0.4;
+  camLook.lerp(lobby ? tmp.copy(orbitSys.position) : tmp.set(0, -0.3, 0), k * 0.5);
+  const R = 9 - (reduce ? 0 : beatFlash * 0.18 + breath * 0.15);
+  // Blend between the fixed front view and the orbit; stay in orbit mode until the angle is home.
+  const home0 = Math.abs(camAngle - Math.round(camAngle / (Math.PI * 2)) * Math.PI * 2) < 0.02;
+  camBlend += ((orbiting || !home0 ? 1 : 0) - camBlend) * k * 0.5;
+  if (camBlend < 0.002) { camera.position.set(0, 0.4, R); camera.rotation.set(0, 0, 0); }
+  else {
+    const orbitPosV = tmp.set(camLook.x + Math.sin(camAngle) * R, 0.4 + Math.sin(camAngle * 0.5) * 1.2, camLook.z + Math.cos(camAngle) * R);
+    camera.position.set(0, 0.4, R).lerp(orbitPosV, camBlend);
+    camLookNow.set(0, 0.4, 0).lerp(camLook, camBlend);
+    camera.lookAt(camLookNow);
+  }
 
   // Formations: a new shape every ~12 s (on a downbeat when music plays), or on request.
   if (lobby && !reduce) {
