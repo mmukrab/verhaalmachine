@@ -4,8 +4,8 @@ import {
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS
-} from "./common.js";
-import { syncSpace } from "./space.js";
+} from "./common.js?v=3";
+import { syncSpace } from "./space.js?v=3";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;

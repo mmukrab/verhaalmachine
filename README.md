@@ -78,3 +78,6 @@ De `firebaseConfig`-gegevens zijn niet geheim; de bescherming zit in `firestore.
 - elke student kan alleen de eigen naam, zin en stem schrijven;
 - zinnen alleen tijdens de schrijfronde, stemmen alleen tijdens de stemronde, niet op de eigen zin;
 - zinnen maximaal 240 tekens, namen maximaal 30.
+
+## Na een wijziging: versienummer ophogen
+Browsers bewaren de scripts een tijd. Verhoog na elke wijziging het getal in `?v=…` in `index.html`, `host.html` en de `import`-regels in `js/*.js` (overal hetzelfde getal), anders zien spelers nog de oude versie.

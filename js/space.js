@@ -3,7 +3,7 @@
 // it as sparks, the winner comes to the front. Chosen sentences form the story arc
 // (verhaalboog) along the top.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js";
+import { hash } from "./common.js?v=3";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, GLOW, raf = 0, spin = 0, last = 0;
