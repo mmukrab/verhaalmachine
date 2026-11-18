@@ -166,3 +166,9 @@ body.host .panel-box.mod-box { max-width: 900px; }
 .mod-text { font-family: var(--story); font-size: 1.05rem; filter: blur(7px); transition: filter 0.15s; cursor: pointer; outline-offset: 4px; }
 .mod-text:hover, .mod-text:focus { filter: none; }
 button.warn { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Colour legend on the beamer while music plays */
+.legend { position: fixed; left: 16px; bottom: 14px; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; max-width: min(760px, calc(100vw - 32px)); padding: 8px 12px; border-radius: 12px; background: rgba(11, 13, 34, 0.7); font-size: 0.78rem; color: var(--muted); }
+.legend-title { font-weight: 700; color: var(--ink); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend .gem { width: 10px; height: 10px; }

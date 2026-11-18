@@ -5,9 +5,9 @@ import {
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
   modState, visibleAuthors, PALETTE
-} from "./common.js?v=15";
-import { syncSpace, nextFormation } from "./space.js?v=15";
-import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=15";
+} from "./common.js?v=16";
+import { syncSpace, nextFormation, FREQ_FAMILIES } from "./space.js?v=16";
+import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=16";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -164,6 +164,7 @@ function render() {
     const id = "testlicht-" + i; players.push(id); colors[id] = PALETTE[(i * 5) % PALETTE.length];
     if (p !== "lobby" && (i * 7) % 10 < 7) authors.push(id);
   }
+  renderLegend();
   syncSpace($("space"), {
     phase: p, round: r, players, colors, lobbyQr: p === "lobby" && showQr && !setupOpen && !!g, authors, tally: tally(S, r), winner: w[r] || null,
     votes: votersFor(S, r).length, chain: chain(S).map(x => (x ? x.uid : null))
@@ -208,6 +209,20 @@ function renderRegie() {
   else bar.append(btn("Ja, nieuw spel", "primary", () => newGame(), busy), btn("Annuleer", "", () => { confirmNew = false; render(); }));
   bar.append(btn("Uitloggen", "", () => signOut(auth)));
   bar.append(el("span", "lbl", "Toets H verbergt deze balk"));
+}
+
+/* ---------- colour legend (only while music plays) ---------- */
+function renderLegend() {
+  const box = $("legend"), on = !!musicMode();
+  box.hidden = !on;
+  if (!on || box.childElementCount) return;
+  box.append(el("span", "legend-title", "Kleur = toonhoogte"));
+  for (const f of FREQ_FAMILIES) {
+    const item = el("span", "legend-item"); const dot = el("span", "gem"); dot.style.background = f.swatch;
+    item.append(dot, document.createTextNode(f.name + " · " + f.what)); box.append(item);
+  }
+  const w = el("span", "legend-item"); const d = el("span", "gem"); d.style.background = "#f4f4f8";
+  w.append(d, document.createTextNode("Wit · alles")); box.append(w);
 }
 
 /* ---------- music ---------- */

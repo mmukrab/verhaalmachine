@@ -58,6 +58,7 @@ Handig:
 - **Moderatie:** een woordfilter in de app houdt grove taal tegen (de zin wordt niet verstuurd). Zinnen met een gevoelig woord of de naam van een klasgenoot komen wel binnen maar doen pas mee met stemmen als jij ze toestaat. Via **Zinnen controleren** (met een rood getal als er iets wacht) zie je alle zinnen vervaagd; beweeg erover om te lezen en kies **Toestaan** of **Verbergen**. De woordenlijst staat in `js/moderation.js`.
 - In de wachtruimte vormen de lichtjes om de ~12 seconden een andere vorm (banen, ring, dubbele helix, hart, sterrenstelsel, golf, kubus, ster); met muziek wisselt dat op de eerste tel van de maat. **Andere vorm** wisselt direct.
 - **Testlichtjes** (0 → 10 → 30 → 100 → 200) zet extra lichtjes op alleen jouw beamer, om te zien hoe het eruitziet met een grote groep. Ze worden niet in het spel opgeslagen en verdwijnen bij herladen.
+- **Kleur = toonhoogte:** elke kleurgroep reageert op een eigen deel van de muziek: groen = bas, turquoise = laag, blauw = laag-midden, paars = midden, roze = hoog-midden, rood = hoog, oranje = hoger, geel = sissende klanken (hi-hats); wit reageert op alles. Alleen de bas-kleuren flitsen op de kick. Tijdens muziek staat linksonder een legenda. De indeling staat in `js/space.js` (`FREQ_FAMILIES`).
 - Elke student heeft een eigen kleur. Die zien ze op hun telefoon én in de 3D-weergave.
 - Elk **Nieuw spel** krijgt een nieuwe code; oude spellen blijven bewaard.
 

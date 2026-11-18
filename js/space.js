@@ -5,8 +5,8 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=15";
-import { levels } from "./audio.js?v=15";
+import { hash } from "./common.js?v=16";
+import { levels } from "./audio.js?v=16";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
@@ -143,12 +143,39 @@ function particle(color, size) {
   const halo = new THREE.Sprite(glowMat(color)); halo.scale.setScalar(1);
   const core = new THREE.Sprite(glowMat(0xffffff, 0.9)); core.scale.setScalar(0.3);
   g.add(aura, halo, core); g.scale.setScalar(size);
-  g.userData = { aura, halo, core, color, base: new THREE.Color(color) };
+  g.userData = { aura, halo, core, color, base: new THREE.Color(color), range: bandsFor(color) };
   return g;
 }
+/* ---------- colour → frequency ----------
+   Each colour family listens to its own part of the spectrum (16 log bands, ~40 Hz–11 kHz):
+   greens are the bass, reds the highs. White/grey listens to the whole mix. */
+export const FREQ_FAMILIES = [
+  { name: "Groen", what: "bas", from: 75, to: 165, bands: [0, 2], swatch: "#2ecc71" },
+  { name: "Turquoise", what: "laag", from: 165, to: 200, bands: [3, 5], swatch: "#1dd3b0" },
+  { name: "Blauw", what: "laag-midden", from: 200, to: 250, bands: [6, 7], swatch: "#4d7cff" },
+  { name: "Paars", what: "midden", from: 250, to: 290, bands: [8, 9], swatch: "#9b6bff" },
+  { name: "Roze", what: "hoog-midden", from: 290, to: 340, bands: [10, 11], swatch: "#ff6fb5" },
+  { name: "Rood", what: "hoog", from: 340, to: 375, bands: [12, 13], swatch: "#ff5d5d" },
+  { name: "Oranje", what: "hoger", from: 15, to: 40, bands: [14, 14], swatch: "#ff9f43" },
+  { name: "Geel", what: "hoogst (sissen)", from: 40, to: 75, bands: [15, 15], swatch: "#ffd23f" }
+];
+const hsl = {};
+/** [lo, hi] band range for a colour, or null (white/grey: the whole mix). */
+function bandsFor(color) {
+  new THREE.Color(color).getHSL(hsl);
+  if (hsl.s < 0.25) return null;
+  const h = hsl.h * 360;
+  for (const f of FREQ_FAMILIES) {
+    const hh = f.to > 360 && h < f.from ? h + 360 : h;
+    if (hh >= f.from && hh < f.to) return f.bands;
+  }
+  return null;
+}
+const isBass = r => r && r[0] <= 2;
+
 function setColor(g, color) {
   if (g.userData.color === color) return;
-  g.userData.color = color; g.userData.base.set(color);
+  g.userData.color = color; g.userData.base.set(color); g.userData.range = bandsFor(color);
   g.userData.halo.material.color.set(color); g.userData.aura.material.color.set(color);
 }
 function setOpacity(g, a, glow) {
@@ -286,9 +313,20 @@ function loop(now) {
     }
 
     // Music: each light listens to its own band plus the bass; quick attack, slower release.
-    const want = m.on ? Math.min(1.2, m.bands[o.band] * 0.85 + m.bass * 0.45) : 0;
+    // Music: each colour listens only to its own frequency range (see FREQ_FAMILIES).
+    const rg = o.g.userData.range;
+    let want = 0;
+    if (m.on) {
+      // The loudest band in the colour's range, so one clear tone is enough to light it up.
+      if (rg) { let top = 0; for (let b = rg[0]; b <= rg[1]; b++) top = Math.max(top, m.bands[b]); want = Math.min(1.2, top * 1.15); }
+      else want = Math.min(1.2, m.level);
+    }
     o.music += (want - o.music) * (want > o.music ? 1 : 0.15);   // instant attack: no lag on the hit
-    if (m.beat && !reduce) o.pulse = Math.max(o.pulse, (m.downbeat ? 0.85 : 0.5) + m.bass * 0.4);
+    // The kick belongs to the bass colours; the rest only feels the first beat of the bar.
+    if (m.beat && !reduce) {
+      const p = isBass(rg) ? (m.downbeat ? 0.95 : 0.6) + m.bass * 0.4 : (m.downbeat ? 0.35 : 0);
+      if (p) o.pulse = Math.max(o.pulse, p);
+    }
 
     o.pulse = Math.max(0, o.pulse - dt * 3);
     o.cur += (o.scale - o.cur) * k;
