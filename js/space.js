@@ -5,14 +5,15 @@
 // (verhaalboog) along the top. With music on, every light swells and flares with
 // its own frequency band and flashes on the beat.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=6";
-import { levels } from "./audio.js?v=6";
+import { hash } from "./common.js?v=7";
+import { levels } from "./audio.js?v=7";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, orbitSys, GLOW, raf = 0, spin = 0, last = 0;
 const objs = new Map();
 let sparks = [], lastRound = -1, lastVotes = 0, arcKey = "", phaseNow = "lobby", authored = new Set();
-let sphereSide = false, stars, beatFlash = 0;
+let sphereSide = false, stars, beatFlash = 0, breath = 0;
+const WHITE = new THREE.Color(0xffffff);
 const tmp = new THREE.Vector3(), X_AXIS = new THREE.Vector3(1, 0, 0), Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 function glowTexture() {
@@ -74,9 +75,9 @@ function orbitOf(uid) {
     dir: (h & 1) ? 1 : -1
   };
 }
-function orbitPos(o, ang, out) {
-  const b = o.orbit;
-  out.set(Math.cos(ang) * b.r, 0, Math.sin(ang) * b.r).applyAxisAngle(X_AXIS, b.incl).applyAxisAngle(Y_AXIS, b.node);
+function orbitPos(o, ang, out, grow = 1) {
+  const b = o.orbit, r = b.r * grow;
+  out.set(Math.cos(ang) * r, 0, Math.sin(ang) * r).applyAxisAngle(X_AXIS, b.incl).applyAxisAngle(Y_AXIS, b.node);
   return orbitSys.localToWorld(out);
 }
 
@@ -87,17 +88,18 @@ function particle(color, size) {
   const halo = new THREE.Sprite(glowMat(color)); halo.scale.setScalar(1);
   const core = new THREE.Sprite(glowMat(0xffffff, 0.9)); core.scale.setScalar(0.3);
   g.add(aura, halo, core); g.scale.setScalar(size);
-  g.userData = { aura, halo, core, color };
+  g.userData = { aura, halo, core, color, base: new THREE.Color(color) };
   return g;
 }
 function setColor(g, color) {
   if (g.userData.color === color) return;
-  g.userData.color = color; g.userData.halo.material.color.set(color); g.userData.aura.material.color.set(color);
+  g.userData.color = color; g.userData.base.set(color);
+  g.userData.halo.material.color.set(color); g.userData.aura.material.color.set(color);
 }
 function setOpacity(g, a, glow) {
   g.userData.halo.material.opacity = a;
   g.userData.core.material.opacity = a * 0.9;
-  g.userData.aura.material.opacity = Math.min(0.45, a * (0.1 + glow * 0.3));
+  g.userData.aura.material.opacity = Math.min(0.3, a * (0.1 + glow * 0.15));
 }
 
 function buildArc(slots, colors, finale) {
@@ -188,6 +190,10 @@ function loop(now) {
   const m = levels();
   if (m.beat && !reduce) beatFlash = 1;
   beatFlash = Math.max(0, beatFlash - dt * 4);
+  // The whole group breathes with the bass: quick out, slower back.
+  const bassNow = m.on ? m.bass : 0;
+  breath += (bassNow - breath) * (bassNow > breath ? 0.5 : 0.1);
+  camera.position.z = 9 - (reduce ? 0 : beatFlash * 0.18 + breath * 0.15);
 
   if (phaseNow === "reveal") spin += (Math.round(spin / (Math.PI * 2)) * Math.PI * 2 - spin) * k;
   else if (!reduce) spin += dt * 0.12;
@@ -201,27 +207,39 @@ function loop(now) {
 
   for (const o of objs.values()) {
     if (lobby) {
-      // Orbit speed picks up a little with the music.
-      if (!reduce) o.ang += o.orbit.dir * dt * (0.35 + m.level * 0.5) / Math.pow(o.orbit.r / 2, 1.5);
-      o.target = cluster.worldToLocal(orbitPos(o, o.ang, new THREE.Vector3()));
+      // Orbits speed up with the music and the sphere swells with the bass.
+      if (!reduce) o.ang += o.orbit.dir * dt * (0.35 + m.level * 1.1) / Math.pow(o.orbit.r / 2, 1.5);
+      const grow = reduce ? 1 : 1 + breath * 0.28 + o.pulse * 0.18;
+      o.target = cluster.worldToLocal(orbitPos(o, o.ang, new THREE.Vector3(), grow));
+      o.g.position.lerp(o.target, k);
+    } else {
+      // Outside the lobby the lights push outward a little on the music.
+      o.g.position.lerp(tmp.copy(o.target).multiplyScalar(reduce ? 1 : 1 + o.music * 0.14 + o.pulse * 0.1), k);
     }
-    o.g.position.lerp(o.target, k);
 
     // Music: each light listens to its own band plus the bass; quick attack, slower release.
-    const want = m.on ? Math.min(1, m.bands[o.band] * 0.65 + m.bass * 0.35) : 0;
-    o.music += (want - o.music) * (want > o.music ? 0.5 : 0.08);
-    if (m.beat && !reduce) o.pulse = Math.max(o.pulse, 0.25 + m.bass * 0.25);
+    const want = m.on ? Math.min(1.2, m.bands[o.band] * 0.85 + m.bass * 0.45) : 0;
+    o.music += (want - o.music) * (want > o.music ? 0.6 : 0.09);
+    if (m.beat && !reduce) o.pulse = Math.max(o.pulse, 0.5 + m.bass * 0.4);
 
-    o.pulse = Math.max(0, o.pulse - dt * 1.6);
+    o.pulse = Math.max(0, o.pulse - dt * 2.2);
     o.cur += (o.scale - o.cur) * k;
     const twinkle = reduce ? 1 : 1 + Math.sin(t * 2.3 + o.wobble) * 0.06;
-    o.g.scale.setScalar(o.cur * twinkle * (1 + o.pulse * 0.9 + o.music * 0.55));
+    // The light itself swells strongly; the wide aura grows only a little, so a full
+    // class does not melt into one white cloud.
+    const u = o.g.userData, boost = o.music * 1.3 + o.pulse * 1.1;
+    o.g.scale.setScalar(o.cur * twinkle);
+    u.halo.scale.setScalar(1 + boost);
+    u.core.scale.setScalar(0.3 * (1 + boost * 0.7));
+    u.aura.scale.setScalar(1.9 * (1 + boost * 0.25));
+    // Peaks make the colour burn towards white-hot.
+    u.halo.material.color.copy(u.base).lerp(WHITE, Math.min(0.35, o.music * 0.2 + o.pulse * 0.25));
     const a = o.g.userData.halo.material.opacity;
-    setOpacity(o.g, a + (Math.min(1, o.opacity * (0.75 + o.music * 0.25) + o.pulse * 0.5) - a) * k, o.music + o.pulse);
+    setOpacity(o.g, a + (Math.min(1, o.opacity * (m.on ? 0.55 + o.music * 0.45 : 1) + o.pulse * 0.5) - a) * k, o.music + o.pulse);
     if (!reduce) o.g.position.y += Math.sin(t + o.wobble) * 0.002;
   }
-  stars.material.opacity = 0.8 + beatFlash * 0.2;
-  stars.material.size = 0.09 * (1 + beatFlash * 0.35);
+  stars.material.opacity = 0.7 + beatFlash * 0.3;
+  stars.material.size = 0.09 * (1 + beatFlash * 0.6 + breath * 0.3);
 
   sparks = sparks.filter(s => {
     s.life += dt; s.m.position.lerp(s.to.g.position, 1 - Math.pow(0.01, dt));
