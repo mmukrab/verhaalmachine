@@ -4,8 +4,8 @@ import {
   $, el, btn, banner, codeFromUrl, joinUrl, colorOf, watchGame,
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS
-} from "./common.js?v=3";
-import { syncSpace } from "./space.js?v=3";
+} from "./common.js?v=4";
+import { syncSpace } from "./space.js?v=4";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -142,7 +142,7 @@ function render() {
   for (const uid of players) colors[uid] = colorOf(S, uid);
   for (const x of chain(S)) if (x) colors[x.uid] = colorOf(S, x.uid);
   syncSpace($("space"), {
-    phase: p, round: r, players, colors, authors: authorsFor(S, r), tally: tally(S, r), winner: w[r] || null,
+    phase: p, round: r, players, colors, lobbyQr: p === "lobby" && showQr && !setupOpen && !!g, authors: authorsFor(S, r), tally: tally(S, r), winner: w[r] || null,
     votes: votersFor(S, r).length, chain: chain(S).map(x => (x ? x.uid : null))
   });
 }

@@ -4,7 +4,7 @@ import {
   $, el, btn, banner, codeFromUrl, colorOf, defaultColor, isColor, PALETTE, watchGame,
   rounds, cur, phase, textOf, authorsFor, tally, nameOf, shuffleStable,
   renderArc, renderManuscript, MAX, NAME_MAX
-} from "./common.js?v=3";
+} from "./common.js?v=4";
 
 const stage = $("stage");
 const code = codeFromUrl();

@@ -1,14 +1,17 @@
 // 3D story space for the beamer: every player is a glowing particle in their own
 // colour, drifting in a night sky. Writing makes your light brighter, votes fly to
 // it as sparks, the winner comes to the front. Chosen sentences form the story arc
-// (verhaalboog) along the top.
+// (verhaalboog) along the top. While players join (lobby), the lights circle a
+// planet like moons, each on its own tilted orbit.
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-import { hash } from "./common.js?v=3";
+import { hash } from "./common.js?v=4";
 
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let renderer, scene, camera, cluster, arc, GLOW, raf = 0, spin = 0, last = 0;
 const objs = new Map();
 let sparks = [], lastRound = -1, lastVotes = 0, arcKey = "", phaseNow = "lobby", authored = new Set();
+let planet, orbitSys, planetSide = false, planetShow = 1;
+const tmp = new THREE.Vector3();
 
 function glowTexture() {
   const c = document.createElement("canvas"); c.width = c.height = 128;
@@ -41,10 +44,70 @@ function init(canvas) {
   const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xc9cdf0, size: 0.09 })));
 
+  scene.add(new THREE.AmbientLight(0x8890c8, 0.6));
+  const sun = new THREE.DirectionalLight(0xfff2dc, 2.6); sun.position.set(-6, 4, 6); scene.add(sun);
+  buildPlanet();
+
   cluster = new THREE.Group(); cluster.position.y = -0.9; scene.add(cluster);
   arc = new THREE.Group(); scene.add(arc);
   addEventListener("resize", resize); resize();
 }
+/* ---------- planet with moons (lobby) ---------- */
+function bandTexture() {
+  const c = document.createElement("canvas"); c.width = 512; c.height = 256;
+  const x = c.getContext("2d");
+  const cols = ["#2a2f6e", "#3b3f8f", "#5b4fa8", "#2f3a7a", "#7a5fb8", "#3a4590", "#c99a3a", "#4a3f8c", "#2a2f6e"];
+  let y = 0;
+  while (y < 256) {
+    const h = 8 + Math.random() * 30;
+    x.fillStyle = cols[Math.floor(Math.random() * cols.length)];
+    x.globalAlpha = 0.55 + Math.random() * 0.45; x.fillRect(0, y, 512, h); y += h;
+  }
+  x.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function buildPlanet() {
+  planet = new THREE.Group(); scene.add(planet);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32),
+    new THREE.MeshStandardMaterial({ map: bandTexture(), roughness: 0.85, metalness: 0, emissive: 0x141838, transparent: true }));
+  ball.rotation.z = 0.35;
+  const atmo = new THREE.Sprite(glowMat(0x6c7cff, 0.45)); atmo.scale.setScalar(3.4); atmo.renderOrder = -1;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.45, 2.05, 96),
+    new THREE.MeshBasicMaterial({ color: 0xf5b829, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = Math.PI / 2;
+  // Moons orbit in this tilted frame, so their circles read as ellipses.
+  orbitSys = new THREE.Group(); orbitSys.rotation.set(0.42, 0, -0.18);
+  orbitSys.add(ring);
+  planet.add(atmo, ball, orbitSys);
+  planet.userData = { ball, atmo, ring };
+}
+function orbitOf(uid) {
+  const h = hash(uid + "orbit");
+  return {
+    r: 2.25 + (h % 1000) / 1000 * 0.85,
+    incl: (((h >>> 10) % 1000) / 1000 - 0.5) * 0.7,
+    node: ((h >>> 20) % 1000) / 1000 * Math.PI * 2,
+    phase: (hash(uid) % 1000) / 1000 * Math.PI * 2
+  };
+}
+/** World position of a moon at time t (seconds). */
+function moonPos(o, t, out) {
+  const b = o.orbit, a = b.phase + (reduce ? 0 : t * 0.75 / Math.pow(b.r, 1.5));
+  out.set(Math.cos(a) * b.r, 0, Math.sin(a) * b.r);
+  out.applyAxisAngle(X_AXIS, b.incl).applyAxisAngle(Y_AXIS, b.node);
+  return orbitSys.localToWorld(out);
+}
+const X_AXIS = new THREE.Vector3(1, 0, 0), Y_AXIS = new THREE.Vector3(0, 1, 0);
+function orbitLine(o, color) {
+  const pts = [];
+  for (let i = 0; i <= 96; i++) {
+    const a = i / 96 * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a) * o.r, 0, Math.sin(a) * o.r).applyAxisAngle(X_AXIS, o.incl).applyAxisAngle(Y_AXIS, o.node));
+  }
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.22, depthWrite: false }));
+}
+
 function resize() {
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.setSize(innerWidth, innerHeight, false);
@@ -107,12 +170,15 @@ export function syncSpace(canvas, v) {
       const h = home(uid), g = particle(color, 0.01);
       g.position.set(h.x * 0.4, -7, h.z + 2);
       cluster.add(g);
-      o = { g, target: h, scale: 0.7, opacity: 0.6, wobble: Math.random() * 6, pulse: 0 };
+      o = { g, target: h, scale: 0.7, opacity: 0.6, wobble: Math.random() * 6, pulse: 0, orbit: orbitOf(uid) };
+      o.line = orbitLine(o.orbit, color); orbitSys.add(o.line);
       objs.set(uid, o);
     }
+    if (o.g.userData.color !== color) o.line.material.color.set(color);
     setColor(o.g, color);
   }
-  for (const [uid, o] of objs) if (!ids.has(uid)) { cluster.remove(o.g); objs.delete(uid); }
+  for (const [uid, o] of objs) if (!ids.has(uid)) { cluster.remove(o.g); orbitSys.remove(o.line); objs.delete(uid); }
+  planetSide = !!v.lobbyQr;
 
   // Writing a sentence makes your light flare up once.
   for (const uid of v.authors) if (!authored.has(uid)) { authored.add(uid); const o = objs.get(uid); if (o && v.phase === "write") o.pulse = 1; }
@@ -127,7 +193,7 @@ export function syncSpace(canvas, v) {
     } else if (v.phase === "write" || v.phase === "vote") {
       o.target = home(uid); o.scale = wrote ? 1.35 : 0.7; o.opacity = wrote ? 1 : (v.phase === "vote" ? 0.3 : 0.55);
     } else {
-      o.target = home(uid).multiplyScalar(v.phase === "finale" ? 1.5 : 1); o.scale = 0.9; o.opacity = 0.85;
+      o.target = home(uid).multiplyScalar(v.phase === "finale" ? 1.5 : 1); o.scale = v.phase === "lobby" ? 1.15 : 0.9; o.opacity = v.phase === "lobby" ? 1 : 0.85;
     }
   }
   if (v.phase === "vote" && v.votes > lastVotes && !reduce) {
@@ -154,6 +220,25 @@ function loop(now) {
   else if (!reduce) spin += dt * 0.12;
   cluster.rotation.y = spin;
   const t = now / 1000;
+  const lobby = phaseNow === "lobby";
+
+  // Planet: in view during the lobby (next to the QR code when it is big), then it sinks away.
+  planetShow += ((lobby ? 1 : 0) - planetShow) * k * 0.6;
+  const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.position.z * camera.aspect;
+  const px = planetSide && halfW > 6 ? Math.min(halfW - 3.6, 5) : 0;
+  planet.position.lerp(tmp.set(px, lobby ? -0.3 : -6, 0), k * 0.5);
+  planet.scale.setScalar(0.35 + planetShow * 0.65);
+  planet.visible = planetShow > 0.02;
+  planet.userData.ball.material.opacity = planetShow;
+  planet.userData.atmo.material.opacity = 0.45 * planetShow;
+  planet.userData.ring.material.opacity = 0.28 * planetShow;
+  if (!reduce) planet.userData.ball.rotation.y += dt * 0.08;
+  planet.updateMatrixWorld(true); cluster.updateMatrixWorld(true);
+  for (const o of objs.values()) {
+    o.line.material.opacity = 0.22 * planetShow;
+    if (lobby) o.target = cluster.worldToLocal(moonPos(o, t, new THREE.Vector3()));
+  }
+
   for (const o of objs.values()) {
     o.g.position.lerp(o.target, k);
     o.pulse = Math.max(0, o.pulse - dt * 1.2);
