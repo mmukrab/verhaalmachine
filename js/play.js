@@ -4,8 +4,8 @@ import {
   $, el, btn, banner, codeFromUrl, colorOf, defaultColor, isColor, PALETTE, watchGame,
   rounds, cur, phase, textOf, authorsFor, tally, nameOf, shuffleStable,
   renderArc, renderManuscript, MAX, NAME_MAX, modState, visibleAuthors, otherNames
-} from "./common.js?v=13";
-import { moderate } from "./moderation.js?v=13";
+} from "./common.js?v=14";
+import { moderate } from "./moderation.js?v=14";
 
 const stage = $("stage");
 const code = codeFromUrl();

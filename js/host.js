@@ -5,9 +5,9 @@ import {
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
   modState, visibleAuthors
-} from "./common.js?v=13";
-import { syncSpace } from "./space.js?v=13";
-import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=13";
+} from "./common.js?v=14";
+import { syncSpace } from "./space.js?v=14";
+import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=14";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
@@ -272,14 +272,16 @@ function renderStage() {
       stage.append(el("p", "tie-note", "Gelijkspel: " + tie.ids.length + " zinnen met " + n + (n === 1 ? " stem" : " stemmen") + " · " +
         (tie.by === "docent" ? "gekozen door de docent" : "winnaar gekozen door loting") + ". Klik een andere zin om die te kiezen."));
       const others = el("div", "cards tie-cards");
-      for (const uid of tie.ids) {
-        if (uid === w || !textOf(S, uid, r)) continue;
+      // Show at most 6 alternatives; with a big tie the rest is reachable via "Andere winnaar".
+      const alts = tie.ids.filter(uid => uid !== w && textOf(S, uid, r));
+      for (const uid of alts.slice(0, 6)) {
         const b = el("button", "card"); b.type = "button"; b.disabled = busy;
         b.append(el("span", null, textOf(S, uid, r)), el("span", "meta", nameOf(S, uid) + " · Kies deze zin"));
         b.onclick = () => host.pick(uid);
         others.append(b);
       }
       stage.append(others);
+      if (alts.length > 6) stage.append(el("p", "note", "En nog " + (alts.length - 6) + " andere zinnen met evenveel stemmen: gebruik Andere winnaar om ze langs te lopen."));
     }
   }
 }

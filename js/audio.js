@@ -3,7 +3,7 @@
 // A music file is analysed before it plays (tempo + beat grid, see beats.js): its beats then
 // come from the song's own clock, so they stay exactly in time. The microphone uses live
 // detection with a tempo lock.
-import { analyseSong, LiveBeats } from "./beats.js?v=13";
+import { analyseSong, LiveBeats } from "./beats.js?v=14";
 
 let ctx = null, analyser = null, data = null, src = null, el = null, url = "", stream = null;
 let mode = "";                       // "", "file" or "mic"
