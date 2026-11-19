@@ -61,6 +61,7 @@ Handig:
 - **Kleur = toonhoogte:** elke kleurgroep reageert op een eigen deel van de muziek: groen = bas, turquoise = laag, blauw = laag-midden, paars = midden, roze = hoog-midden, rood = hoog, oranje = hoger, geel = sissende klanken (hi-hats); wit reageert op alles. Alleen de bas-kleuren flitsen op de kick. Tijdens muziek staat linksonder een legenda. De indeling staat in `js/space.js` (`FREQ_FAMILIES`).
 - **Gloed** (schuifregelaar in de regiebalk, 0–150%): hoe ver de gloed van elk lichtje uitstraalt. Lager zetten als de lichtjes op een felle beamer aan elkaar klonteren; de laptop onthoudt de instelling.
 - **Camera draait** (aan/uit): de camera cirkelt langzaam om de lichtjes heen, ook iets op en neer. Bij de uitslag en de finale draait hij vanzelf terug naar voren. De laptop onthoudt de instelling.
+- **Woordenwolk** (vanaf ronde 1): een venster met de meest gebruikte woorden uit alle zinnen, deze ronde of alleen het verhaal. Lidwoorden, kleine woordjes en verborgen zinnen tellen niet mee. **Download als afbeelding** slaat een PNG op (1600×900).
 - Elke student heeft een eigen kleur. Die zien ze op hun telefoon én in de 3D-weergave.
 - Elk **Nieuw spel** krijgt een nieuwe code; oude spellen blijven bewaard.
 

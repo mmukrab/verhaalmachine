@@ -5,14 +5,15 @@ import {
   rounds, cur, phase, textOf, authorsFor, votersFor, tally, nameOf, chain,
   renderArc, renderManuscript, storyAsText, DEFAULT_ROUNDS, PRESETS, MAX_ROUNDS, LABEL_MAX, PROMPT_MAX,
   modState, visibleAuthors, PALETTE
-} from "./common.js?v=18";
-import { syncSpace, nextFormation, FREQ_FAMILIES, getBloom, setBloom, getCamOrbit, setCamOrbit } from "./space.js?v=18";
-import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=18";
+} from "./common.js?v=20";
+import { countWords, drawCloud } from "./wordcloud.js?v=20";
+import { syncSpace, nextFormation, FREQ_FAMILIES, getBloom, setBloom, getCamOrbit, setCamOrbit } from "./space.js?v=20";
+import { playFile, listenMic, stopMusic, musicMode, musicName, musicInfo, nudgeSync } from "./audio.js?v=20";
 
 const stage = $("stage");
 let code = codeFromUrl(), S = null, unwatch = null, hostUser = null;
 const TEST_STEPS = [0, 10, 30, 100, 200];
-let testLights = 0;
+let testLights = 0, cloudOpen = false, cloudScope = "all", cloudKey = "";
 let busy = false, showQr = true, confirmNew = false, setupOpen = false, modOpen = false, qrFor = "";
 
 if (!configured) {
@@ -165,6 +166,9 @@ function render() {
     if (p !== "lobby" && (i * 7) % 10 < 7) authors.push(id);
   }
   renderLegend();
+  const cloud = $("cloud"), showCloud = cloudOpen && !!g && p !== "lobby";
+  cloud.hidden = !showCloud;
+  if (showCloud) renderCloud();
   syncSpace($("space"), {
     phase: p, round: r, players, colors, lobbyQr: p === "lobby" && showQr && !setupOpen && !!g, authors, tally: tally(S, r), winner: w[r] || null,
     votes: votersFor(S, r).length, chain: chain(S).map(x => (x ? x.uid : null))
@@ -188,6 +192,7 @@ function renderRegie() {
       bar.append(btn(last ? "Naar de finale" : "Volgende ronde", "primary", host.next, busy));
     }
     if (p === "write" || p === "vote") if (!last) bar.append(btn("Direct naar finale", "", host.finale, busy));
+    if (p !== "lobby") bar.append(btn(cloudOpen ? "Woordenwolk sluiten" : "Woordenwolk", cloudOpen ? "on" : "", () => { cloudOpen = !cloudOpen; cloudKey = ""; render(); }));
     if (p === "write" || p === "vote" || p === "reveal") {
       const waiting = authorsFor(S, r).filter(u => modState(S, u, r).by === "auto").length;
       const b = btn((modOpen ? "Controle sluiten" : "Zinnen controleren") + (waiting ? " (" + waiting + ")" : ""), waiting ? "warn" : "", () => { modOpen = !modOpen; render(); });
@@ -221,6 +226,52 @@ bloomInput.setAttribute("aria-label", "Gloed van de lichtjes");
 const bloomValue = el("span", "bloom-value", bloomInput.value + "%");
 bloomInput.oninput = () => { setBloom(Number(bloomInput.value) / 100); bloomValue.textContent = bloomInput.value + "%"; };
 bloomControl.append(el("span", null, "Gloed"), bloomInput, bloomValue);
+
+/* ---------- word cloud of what the class wrote ---------- */
+const CLOUD_SCOPES = [["all", "Alle zinnen"], ["round", "Deze ronde"], ["story", "Alleen het verhaal"]];
+function cloudSentences() {
+  const r = cur(S);
+  if (cloudScope === "story") return chain(S).filter(Boolean).map(x => x.text);
+  const rs = cloudScope === "round" ? [r] : rounds(S).map((_, i) => i).filter(i => i <= r);
+  const out = [];
+  // Hidden (moderated) sentences never end up in the cloud.
+  for (const i of rs) for (const uid of authorsFor(S, i)) if (!modState(S, uid, i).hidden) out.push(textOf(S, uid, i));
+  return out;
+}
+function renderCloud() {
+  const box = $("cloud");
+  if (!box.firstChild) {
+    const head = el("div", "row cloud-head");
+    head.append(el("h3", null, "Woordenwolk"));
+    for (const [k, label] of CLOUD_SCOPES) {
+      const b = btn(label, "", () => { cloudScope = k; cloudKey = ""; renderCloud(); }); b.dataset.scope = k; head.append(b);
+    }
+    const dl = btn("Download als afbeelding", "", () => {
+      const a = document.createElement("a"); a.href = $("cloud-canvas").toDataURL("image/png");
+      a.download = "woordenwolk-" + (code || "spel") + ".png"; a.click();
+    });
+    head.append(dl, btn("Sluiten", "", () => { cloudOpen = false; render(); }));
+    const cv = el("canvas"); cv.id = "cloud-canvas"; cv.width = 1600; cv.height = 900;
+    cv.setAttribute("role", "img");
+    box.append(head, cv, el("p", "note cloud-note"));
+  }
+  for (const b of box.querySelectorAll("[data-scope]")) b.classList.toggle("on", b.dataset.scope === cloudScope);
+  const sentences = cloudSentences();
+  const key = cloudScope + "|" + sentences.join("|");
+  if (key === cloudKey) return;
+  cloudKey = key;
+  const words = countWords(sentences);
+  const title = ((S.game && S.game.title) || "Ons verhaal") + " · " + CLOUD_SCOPES.find(x => x[0] === cloudScope)[1].toLowerCase();
+  const cv = $("cloud-canvas");
+  const draw = () => {
+    const n = drawCloud(cv, words, { colors: PALETTE.filter(c => c !== "#4d7cff"), title });
+    cv.setAttribute("aria-label", "Woordenwolk: " + words.slice(0, 15).map(w => w.text + " (" + w.count + ")").join(", "));
+    box.querySelector(".cloud-note").textContent = sentences.length + (sentences.length === 1 ? " zin" : " zinnen") + " · " +
+      n + " woorden getoond. Lidwoorden en kleine woordjes tellen niet mee; verborgen zinnen ook niet.";
+  };
+  draw();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);   // redraw once Oswald is loaded
+}
 
 /* ---------- colour legend (only while music plays) ---------- */
 function renderLegend() {
